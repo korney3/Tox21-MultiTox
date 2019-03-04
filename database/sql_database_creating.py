@@ -7,15 +7,11 @@ import sqlite3
 
 import pandas as pd
 import numpy as np
-from rdkit import Chem, DataStructs
-from rdkit.Chem import AllChem, rdMolDescriptors
+from rdkit import Chem
+from rdkit.Chem import AllChem
 from rdkit.Chem import rdMolTransforms as rdmt
-from rdkit.Chem import rdShapeHelpers as rdshp
-import molvs as mv
-from rdkit.Geometry import rdGeometry 
-from scipy import signal
 from func_timeout import FunctionTimedOut,func_set_timeout
-import time
+
 
 #number of conformers created for every molecule
 global NUM_CONFS
@@ -25,9 +21,6 @@ NUM_CONFS=100
 global AMOUNT_OF_ELEM
 AMOUNT_OF_ELEM=6
 
-#amount of molecules in part of database
-global DATA_SIZE
-DATA_SIZE=1000
 
 def enum(*sequential, **named):
     """Handy way to fake an enumerated type in Python
