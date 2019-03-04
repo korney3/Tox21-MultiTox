@@ -1,4 +1,17 @@
-Run file "sql_database_creating.py" in command line as "mpiexec -n N python sql_database_creating.py", where N - amount of processes (windows).
+Run "create_dataset" function from  "csv_database_creating.py" for converting deleting salts from initial compounds. 
+
+Input - "tox21_10k_data_all.sdf"
+
+Output - "tox21_10k_data_all.csv", data (pandas.DataFrame)
+
+Then run "delete_duplicate" function from  "csv_database_creating.py" for merging rows with the same compounds and different properties.
+
+Input - data (pandas.DataFrame)
+
+Output - "tox21_10k_data_all_no_salts.csv"
+
+Run file "sql_database_creating.py" in command line as "mpiexec -n N python sql_database_creating.py", 
+where N - amount of processes (windows).
 
 Input - "tox21_10k_data_all_no_salts.csv"
 
