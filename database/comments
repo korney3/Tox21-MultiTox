@@ -1,10 +1,10 @@
-Run "create_dataset" function from  "csv_database_creating.py" for converting deleting salts from initial compounds. 
+Run "create_dataset" function from  "csv_dataframe_creating.py" for converting deleting salts from initial compounds. 
 
 Input - "tox21_10k_data_all.sdf"
 
 Output - "tox21_10k_data_all.csv", data (pandas.DataFrame)
 
-Then run "delete_duplicate" function from  "csv_database_creating.py" for merging rows with the same compounds and different properties.
+Then run "delete_duplicate" function from  "csv_dataframe_creating.py" for merging rows with the same compounds and different properties.
 
 Input - data (pandas.DataFrame)
 
@@ -16,3 +16,6 @@ where N - amount of processes (windows).
 Input - "tox21_10k_data_all_no_salts.csv"
 
 Output - "tox21_conformers.db", "Wrong SMILES"
+
+"tox21_conformers.db" can be downloaded from 
+https://drive.google.com/drive/folders/1DmUrLd-ew3P_aLzL6hjonV-LW8mI4Zvq?usp=sharing to the root folder
