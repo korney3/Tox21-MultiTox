@@ -3,15 +3,8 @@
 
 import pandas as pd
 import numpy as np
-from rdkit import Chem, DataStructs
-from rdkit.Chem import AllChem, rdMolDescriptors
-from rdkit.Chem import rdMolTransforms as rdmt
-from rdkit.Chem import rdShapeHelpers as rdshp
+from rdkit import Chem
 import molvs as mv
-from rdkit.Geometry import rdGeometry 
-from matplotlib.pyplot import spy
-import matplotlib.pyplot as plt
-from scipy import signal
 
 #function removing salts (leave the longest part of the molecule)
 
