@@ -98,7 +98,7 @@ def create_dataset(filename="tox21_10k_data_all.sdf"):
 #drop molecule if there is contradicted info
 #merge nan and 0/1 values
 
-def del_duplicates(data,filename):
+def del_duplicates(data,filename="tox21_10k_data_all.sdf"):
     name=filename.split('.')[0]
     props=list(data)
     props.remove('smiles')
@@ -115,3 +115,12 @@ def del_duplicates(data,filename):
     data_grouped=data_grouped.dropna(subset=props,how='all')
     data_grouped.to_csv(name + '_no_salts.csv',index=False)
     return data_grouped
+
+def del_wrong_smiles(data, filename="Wrong SMILES"):
+    f=open(filename,'r')
+    del_keys=f.read().split('\n')[:-1]
+    f.close()
+    for key in del_keys:
+            data=data[data.smiles_no_salt != key]
+    data.to_csv('tox21_10k_data_all_no_salts.csv',index=False)
+    return data
