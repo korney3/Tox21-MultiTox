@@ -18,4 +18,4 @@ Input - "tox21_10k_data_all_no_salts.csv"
 Output - "tox21_conformers.db", "Wrong SMILES"
 
 "tox21_conformers.db" can be downloaded from 
-https://drive.google.com/drive/folders/1DmUrLd-ew3P_aLzL6hjonV-LW8mI4Zvq?usp=sharing to the root folder
+https://drive.google.com/drive/folders/1DmUrLd-ew3P_aLzL6hjonV-LW8mI4Zvq?usp=sharing to this folder
