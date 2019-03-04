@@ -1,0 +1,5 @@
+Run file "sql_database_creating.py" in command line as "mpiexec -n N python sql_database_creating.py", where N - amount of processes (windows).
+
+Input - "tox21_10k_data_all_no_salts.csv"
+
+Output - "tox21_conformers.db", "Wrong SMILES"
