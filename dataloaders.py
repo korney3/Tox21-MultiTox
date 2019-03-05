@@ -183,7 +183,6 @@ class Waves_dataset(td.Dataset):
         'Generates one sample of data'
 
         smiles=self.indexing[index]
-        print (smiles)
         y= self.Ys[smiles]
 
         description=self.Xs[smiles][conformer_choice(self.Xs[smiles])]['coordinates']
