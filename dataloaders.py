@@ -34,7 +34,7 @@ def gaussian_blur(molecule,elements,sigma=2,dimx=70,dx=0.5,kern_dim=50):
     from math import floor
     
     dimelem=len(elements)
-    cube=torch.zeros((dimx,dimx,dimx,dimelem))
+    cube=torch.zeros((dimelem,dimx,dimx,dimx))
     
     #build the kernel
     x = torch.arange(-kern_dim/4,kern_dim/4,dx)
@@ -49,16 +49,16 @@ def gaussian_blur(molecule,elements,sigma=2,dimx=70,dx=0.5,kern_dim=50):
         
         for x0,y0,z0 in molecule[atom]:
             
-            x_range=[max(floor(x[0]/dx+x0/dx+dimx/2),0),min(floor(x[-1]/dx+x0/dx+dimx/2+1),cube.shape[0])]
-            y_range=[max(floor(y[0]/dx+y0/dx+dimx/2),0),min(floor(y[-1]/dx+y0/dx+dimx/2+1),cube.shape[1])]
-            z_range=[max(floor(z[0]/dx+z0/dx+dimx/2),0),min(floor(z[-1]/dx+z0/dx+dimx/2+1),cube.shape[2])]
+            x_range=[max(floor(x[0]/dx+x0/dx+dimx/2),0),min(floor(x[-1]/dx+x0/dx+dimx/2+1),cube.shape[1])]
+            y_range=[max(floor(y[0]/dx+y0/dx+dimx/2),0),min(floor(y[-1]/dx+y0/dx+dimx/2+1),cube.shape[2])]
+            z_range=[max(floor(z[0]/dx+z0/dx+dimx/2),0),min(floor(z[-1]/dx+z0/dx+dimx/2+1),cube.shape[3])]
             coord_ranges=[x_range,y_range,z_range]
             for i in range(3):
                 if coord_ranges[i][1]-coord_ranges[i][0]>50:
                     coord_ranges[i][1]=coord_ranges[i][0]+50
-            cube_part=cube[coord_ranges[0][0]:coord_ranges[0][1],
+            cube_part=cube[num_atom,coord_ranges[0][0]:coord_ranges[0][1],
                            coord_ranges[1][0]:coord_ranges[1][1],
-                           coord_ranges[2][0]:coord_ranges[2][1],num_atom]
+                           coord_ranges[2][0]:coord_ranges[2][1]]
             
             kern_ranges=[[],[],[]]
             for i in range(3):
@@ -66,7 +66,7 @@ def gaussian_blur(molecule,elements,sigma=2,dimx=70,dx=0.5,kern_dim=50):
                     kern_ranges[i].append(kern_dim-cube_part.shape[i])
                 else:
                     kern_ranges[i].append(0)
-                if coord_ranges[i][1]==cube.shape[i]:
+                if coord_ranges[i][1]==cube.shape[i+1]:
                     kern_ranges[i].append(cube_part.shape[i])
                 else:
                     kern_ranges[i].append(kern_dim)
@@ -75,9 +75,9 @@ def gaussian_blur(molecule,elements,sigma=2,dimx=70,dx=0.5,kern_dim=50):
                                        kern_ranges[1][0]:kern_ranges[1][1],
                                        kern_ranges[2][0]:kern_ranges[2][1]]
             
-            cube[coord_ranges[0][0]:coord_ranges[0][1],
+            cube[num_atom,coord_ranges[0][0]:coord_ranges[0][1],
                  coord_ranges[1][0]:coord_ranges[1][1],
-                 coord_ranges[2][0]:coord_ranges[2][1],num_atom]=cube_part
+                 coord_ranges[2][0]:coord_ranges[2][1]]=cube_part
 
     return cube
 
@@ -89,7 +89,7 @@ def waves(molecule,elements,sigma=1,dimx=70,dx=0.5,kern_dim=50):
     from math import floor
     omega=1/sigma
     dimelem=len(elements)
-    cube=torch.zeros((dimx,dimx,dimx,dimelem))
+    cube=torch.zeros((dimelem,dimx,dimx,dimx))
     
     #build the kernel
     x = torch.arange(-kern_dim/4,kern_dim/4,dx)  
@@ -103,16 +103,16 @@ def waves(molecule,elements,sigma=1,dimx=70,dx=0.5,kern_dim=50):
         
         for x0,y0,z0 in molecule[atom]:
             
-            x_range=[max(floor(x[0]/dx+x0/dx+dimx/2),0),min(floor(x[-1]/dx+x0/dx+dimx/2+1),cube.shape[0])]
-            y_range=[max(floor(y[0]/dx+y0/dx+dimx/2),0),min(floor(y[-1]/dx+y0/dx+dimx/2+1),cube.shape[1])]
-            z_range=[max(floor(z[0]/dx+z0/dx+dimx/2),0),min(floor(z[-1]/dx+z0/dx+dimx/2+1),cube.shape[2])]
+            x_range=[max(floor(x[0]/dx+x0/dx+dimx/2),0),min(floor(x[-1]/dx+x0/dx+dimx/2+1),cube.shape[1])]
+            y_range=[max(floor(y[0]/dx+y0/dx+dimx/2),0),min(floor(y[-1]/dx+y0/dx+dimx/2+1),cube.shape[2])]
+            z_range=[max(floor(z[0]/dx+z0/dx+dimx/2),0),min(floor(z[-1]/dx+z0/dx+dimx/2+1),cube.shape[3])]
             coord_ranges=[x_range,y_range,z_range]
             for i in range(3):
-                if coord_ranges[i][1]-coord_ranges[i][0]>50:
-                    coord_ranges[i][1]=coord_ranges[i][0]+50
-            cube_part=cube[coord_ranges[0][0]:coord_ranges[0][1],
+                if coord_ranges[i][1]-coord_ranges[i][0]>kern_dim:
+                    coord_ranges[i][1]=coord_ranges[i][0]+kern_dim
+            cube_part=cube[num_atom,coord_ranges[0][0]:coord_ranges[0][1],
                            coord_ranges[1][0]:coord_ranges[1][1],
-                           coord_ranges[2][0]:coord_ranges[2][1],num_atom]
+                           coord_ranges[2][0]:coord_ranges[2][1]]
             
             kern_ranges=[[],[],[]]
             for i in range(3):
@@ -120,7 +120,7 @@ def waves(molecule,elements,sigma=1,dimx=70,dx=0.5,kern_dim=50):
                     kern_ranges[i].append(kern_dim-cube_part.shape[i])
                 else:
                     kern_ranges[i].append(0)
-                if coord_ranges[i][1]==cube.shape[i]:
+                if coord_ranges[i][1]==cube.shape[i+1]:
                     kern_ranges[i].append(cube_part.shape[i])
                 else:
                     kern_ranges[i].append(kern_dim)
@@ -129,15 +129,14 @@ def waves(molecule,elements,sigma=1,dimx=70,dx=0.5,kern_dim=50):
                                        kern_ranges[1][0]:kern_ranges[1][1],
                                        kern_ranges[2][0]:kern_ranges[2][1]]
             
-            cube[coord_ranges[0][0]:coord_ranges[0][1],
+            cube[num_atom,coord_ranges[0][0]:coord_ranges[0][1],
                  coord_ranges[1][0]:coord_ranges[1][1],
-                 coord_ranges[2][0]:coord_ranges[2][1],num_atom]=cube_part
-            
+                 coord_ranges[2][0]:coord_ranges[2][1]]=cube_part
     return cube
 
 #class of dataset created by gauss transformation
 class Gauss_dataset(td.Dataset):
-    def __init__(self,conf_calc,label_dict,elements,indexing, sigma=1,dim=70,dx=0.5,kern_dim=50):
+    def __init__(self,conf_calc,label_dict,elements,indexing, indexes, sigma=1,dim=70,dx=0.5,kern_dim=50):
         self.Xs=conf_calc
         self.Ys=label_dict
         self.elements=elements
@@ -146,15 +145,17 @@ class Gauss_dataset(td.Dataset):
         self.dim=dim
         self.dx=dx
         self.kern_dim=kern_dim
+        self.indexes=indexes
 
     def __len__(self):
         'Denotes the total number of samples'
-        return len(self.indexing.keys())
+        return len(self.indexes)
 
     def __getitem__(self, index):
         'Generates one sample of data'
 
-        smiles=self.indexing[index]
+        i=self.indexes[index]
+        smiles=self.indexing[i]
         
         y= self.Ys[smiles]
 
@@ -165,7 +166,7 @@ class Gauss_dataset(td.Dataset):
     
 #class of dataset created by waves transformation
 class Waves_dataset(td.Dataset):
-    def __init__(self,conf_calc,label_dict,elements,indexing, sigma=1,dim=70,dx=0.5,kern_dim=50):
+    def __init__(self,conf_calc,label_dict,elements,indexing,indexes, sigma=1,dim=70,dx=0.5,kern_dim=50):
         self.Xs=conf_calc
         self.Ys=label_dict
         self.elements=elements
@@ -174,15 +175,18 @@ class Waves_dataset(td.Dataset):
         self.dim=dim
         self.dx=dx
         self.kern_dim=kern_dim
+        self.indexes = indexes
 
     def __len__(self):
         'Denotes the total number of samples'
-        return len(self.indexing.keys())
+        return len(self.indexes)
 
     def __getitem__(self, index):
         'Generates one sample of data'
 
-        smiles=self.indexing[index]
+        i = self.indexes[index]
+        smiles = self.indexing[i]
+
         y= self.Ys[smiles]
 
         description=self.Xs[smiles][conformer_choice(self.Xs[smiles])]['coordinates']
