@@ -2,7 +2,7 @@
 from __future__ import print_function
 
 from mpi4py import MPI
-
+import config
 import sqlite3
 
 import pandas as pd
@@ -14,12 +14,10 @@ from func_timeout import FunctionTimedOut,func_set_timeout
 
 
 #number of conformers created for every molecule
-global NUM_CONFS
-NUM_CONFS=100
+NUM_CONFS=config.NUM_CONFS
 
 #amount of chemical elements taking into account
-global AMOUNT_OF_ELEM
-AMOUNT_OF_ELEM=6
+AMOUNT_OF_ELEM=config.AMOUNT_OF_ELEM
 
 
 def enum(*sequential, **named):
