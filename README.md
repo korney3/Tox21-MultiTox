@@ -1,8 +1,6 @@
-# Tox21-preprocessing
+# Tox21 and MultiTox-preprocessing
 
 (In process)
-
-Preprocessing Tox21 dataset.
 
 To do
 ### 21/02/2019
