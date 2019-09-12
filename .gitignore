@@ -1,0 +1,8 @@
+# Ignore all database files
+*.db
+# ignore folder
+MultiTox/models/
+MultiTox/logs/
+Tox21/experiments/
+Tox21_Neural_Net/logs/
+Tox21_Neural_Net/models/
