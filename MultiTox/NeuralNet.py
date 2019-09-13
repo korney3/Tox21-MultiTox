@@ -377,7 +377,7 @@ def main():
     
         test_set = dl.Gauss_dataset(conf_calc, label_dict, elements, indexing, test_indexes, sigma=args.SIGMA)
         test_generator = td.DataLoader(test_set, batch_size=args.BATCH_SIZE, shuffle=False)
-    else:
+    elif args.AUG=='w':
         # make dataloader for Waves transformation
         train_set = dl.Waves_dataset(conf_calc, label_dict, elements, indexing, train_indexes, sigma=args.SIGMA)
         train_generator = td.DataLoader(train_set, batch_size=args.BATCH_SIZE, shuffle=True)
