@@ -39,15 +39,15 @@ TARGET_NUM = 29
 
 #dataset folder
 global DATASET_PATH
-DATASET_PATH="./Documents/MultiTox/database"
+DATASET_PATH="~/Tox21-MultiTox/MultiTox"
 
 #logs path
 global LOG_PATH
-LOG_PATH="./Documents/MultiTox/logs"
+LOG_PATH="~/Tox21-MultiTox/MultiTox/logs"
 
 #models path
 global MODEL_PATH
-MODEL_PATH="./Documents/MultiTox/models"
+MODEL_PATH="~/Tox21-MultiTox/MultiTox/models"
 
 
 #loss penalty
@@ -338,7 +338,7 @@ def main():
         print('Cached:   ', round(torch.cuda.memory_cached(0)/1024**3,1), 'GB')
     print('Start loading dataset...')
     # get dataset without duplicates from csv
-    data = pd.read_csv(os.path.join(DATASET_PATH, 'MultiTox.csv'))
+    data = pd.read_csv(os.path.join(DATASET_PATH+'/database', 'MultiTox.csv'))
     props = list(data)[1:]
     scaler = StandardScaler()
     data[props]=scaler.fit_transform(data[props])
@@ -347,7 +347,7 @@ def main():
     elements = ld.create_element_dict(data, amount=AMOUNT_OF_ELEM)
 
     # read databases to dictionary
-    conf_calc = ld.reading_sql_database(DATASET_PATH)
+    conf_calc = ld.reading_sql_database(database_dir='./')
     keys=list(conf_calc.keys())
     print ('Initial dataset size = ', len(keys))
     for key in keys:
@@ -416,7 +416,8 @@ def main():
         if early_stopping.early_stop:
             print("Early stopping")
             break
-        torch.save(model.state_dict(), os.path.join(MODEL_PATH, args.NUM_EXP+'_model'+str(epoch)))
+        if epoch%100==0:
+            torch.save(model.state_dict(), os.path.join(MODEL_PATH, args.NUM_EXP+'_model'+str(epoch)))
     model.load_state_dict(torch.load('checkpoint.pt'))
     torch.save(model.state_dict(), os.path.join(MODEL_PATH, args.NUM_EXP+'_model'+str(epoch)+'_fin'))
     f_train_loss.close()

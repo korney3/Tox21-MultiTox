@@ -1,0 +1,9 @@
+import torch
+from torch.nn import Parameter
+print(torch.__version__)
+sigma = Parameter(torch.tensor(2).float().cuda(),requires_grad=True)
+x=2*sigma
+x.backward()
+print(sigma.grad)
+f = open('./models_sigma/chkpt','w')
+f.write('skdjfksfdkfsj')

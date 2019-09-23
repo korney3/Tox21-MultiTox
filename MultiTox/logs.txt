@@ -1,0 +1,6 @@
+[03:32:45] Conflicting single bond directions around double bond at index 1.
+[03:32:45]   BondStereo set to STEREONONE and single bond directions set to NONE.
+[03:32:45] Conflicting single bond directions around double bond at index 1.
+[03:32:45]   BondStereo set to STEREONONE and single bond directions set to NONE.
+[03:32:45] Conflicting single bond directions around double bond at index 1.
+[03:32:45]   BondStereo set to STEREONONE and single bond directions set to NONE.
