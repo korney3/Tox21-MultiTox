@@ -4,3 +4,49 @@
 [03:32:45]   BondStereo set to STEREONONE and single bond directions set to NONE.
 [03:32:45] Conflicting single bond directions around double bond at index 1.
 [03:32:45]   BondStereo set to STEREONONE and single bond directions set to NONE.
+1.2.0
+Using device: cuda
+
+GeForce GTX 1080
+Memory Usage:
+Allocated: 0.0 GB
+Cached:    0.0 GB
+Start loading dataset...
+Initial dataset size =  8323
+Post-processed dataset size =  8323
+Dataset has been loaded
+Neural network initialization...
+sigma <class 'torch.Tensor'> torch.Size([6])
+conv1.weight <class 'torch.Tensor'> torch.Size([32, 6, 3, 3, 3])
+conv1.bias <class 'torch.Tensor'> torch.Size([32])
+conv2.weight <class 'torch.Tensor'> torch.Size([64, 32, 3, 3, 3])
+conv2.bias <class 'torch.Tensor'> torch.Size([64])
+conv3.weight <class 'torch.Tensor'> torch.Size([128, 64, 3, 3, 3])
+conv3.bias <class 'torch.Tensor'> torch.Size([128])
+conv4.weight <class 'torch.Tensor'> torch.Size([256, 128, 3, 3, 3])
+conv4.bias <class 'torch.Tensor'> torch.Size([256])
+fc1.weight <class 'torch.Tensor'> torch.Size([1024, 2048])
+fc1.bias <class 'torch.Tensor'> torch.Size([1024])
+fc2.weight <class 'torch.Tensor'> torch.Size([29, 1024])
+fc2.bias <class 'torch.Tensor'> torch.Size([29])
+Neural network has been initialized
+Traceback (most recent call last):
+  File "Neural_Net_sigma_train.py", line 486, in <module>
+    sys.exit(main()) 
+  File "Neural_Net_sigma_train.py", line 467, in main
+    train(model, optimizer, train_generator, epoch,device,writer=writer,f_loss=f_train_loss,f_loss_ch=f_train_loss_ch)
+  File "Neural_Net_sigma_train.py", line 117, in train
+    output = model(data)
+  File "/home/alisa/anaconda3/lib/python3.7/site-packages/torch/nn/modules/module.py", line 547, in __call__
+    result = self.forward(*input, **kwargs)
+  File "Neural_Net_sigma_train.py", line 337, in forward
+    x_conv = self.convolution(x_cube)
+  File "/home/alisa/anaconda3/lib/python3.7/site-packages/torch/nn/modules/module.py", line 547, in __call__
+    result = self.forward(*input, **kwargs)
+  File "/home/alisa/anaconda3/lib/python3.7/site-packages/torch/nn/modules/container.py", line 92, in forward
+    input = module(input)
+  File "/home/alisa/anaconda3/lib/python3.7/site-packages/torch/nn/modules/module.py", line 547, in __call__
+    result = self.forward(*input, **kwargs)
+  File "/home/alisa/anaconda3/lib/python3.7/site-packages/torch/nn/modules/conv.py", line 478, in forward
+    self.padding, self.dilation, self.groups)
+RuntimeError: CUDA out of memory. Tried to allocate 80.00 MiB (GPU 0; 7.92 GiB total capacity; 1.59 GiB already allocated; 58.19 MiB free; 45.86 MiB cached)
