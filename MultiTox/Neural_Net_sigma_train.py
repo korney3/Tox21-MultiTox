@@ -104,7 +104,8 @@ args = parser.parse_args()
 
 # create train and validation functions
 
-def train(model, optimizer, train_generator, epoch, device, writer = None,f_loss=None,f_loss_ch = None):
+def train(model, optimizer, train_generator, epoch, device, writer = None,f_loss=None,f_loss_ch = None, elements=None):
+    elems=dict([(elements[element], element) for element in elements.keys()])
     model.train()
     train_loss=0
     losses=np.zeros(TARGET_NUM)
@@ -163,7 +164,10 @@ def train(model, optimizer, train_generator, epoch, device, writer = None,f_loss
     train_loss /= len(train_generator.dataset)
     train_loss *= args.BATCH_SIZE
     if writer is not None:
-        writer.add_scalar('Train/Loss/'+str(epoch), train_loss, epoch)
+        writer.add_scalar('Train/Loss/', train_loss, epoch)
+    sigmas = model.sigma.cpu().detach().numpy()
+    for idx,sigma in enumerate(sigmas):
+        writer.add_scalar('Sigma/'+elems[idx], sigma, epoch)
     losses/=num_losses    
     for i,loss in enumerate(losses):
         if f_loss_ch is not None and loss==loss:
@@ -172,7 +176,7 @@ def train(model, optimizer, train_generator, epoch, device, writer = None,f_loss
         
 
 
-def test(model, test_generator,epoch,device,writer=None,f_loss=None):
+def test(model, test_generator,epoch,device,writer=None,f_loss=None, elements=None):
 #    print(f_auc is not None)
     with torch.no_grad():
         model.eval()
@@ -218,7 +222,7 @@ def test(model, test_generator,epoch,device,writer=None,f_loss=None):
         print('\nTest set: Average loss: {:.4f}\n'
               .format(test_loss))
     if writer is not None:
-        writer.add_scalar('Test/Loss/'+str(epoch), test_loss, epoch)
+        writer.add_scalar('Test/Loss/', test_loss, epoch)
     losses/=num_losses    
     for i,loss in enumerate(losses):
         if f_loss is not None and loss == loss:
@@ -444,7 +448,7 @@ def main():
 #     print(model)
     model=model.to(device)
 #     summary(model, (6, 70, 70,70))
-    torch.save(model.state_dict(), os.path.join(MODEL_PATH, 'model_fin'))
+#     torch.save(model.state_dict(), os.path.join(MODEL_PATH, 'model_fin'))
     for name, param in model.named_parameters():
         print(name, type(param.data), param.size())
     # set optimizer
@@ -464,8 +468,8 @@ def main():
         try:
 #            train(model, optimizer, train_generator_waves, epoch,device,f_auc=f_train_auc,f_loss=f_train_loss)
 #            test(model, test_generator_waves,epoch, device,f_auc=f_test_auc,f_loss=f_test_loss)
-            train(model, optimizer, train_generator, epoch,device,writer=writer,f_loss=f_train_loss,f_loss_ch=f_train_loss_ch)
-            test_loss = test(model, test_generator,epoch, device,writer=writer,f_loss=f_test_loss)
+            train(model, optimizer, train_generator, epoch,device,writer=writer,f_loss=f_train_loss,f_loss_ch=f_train_loss_ch, elements=elements)
+            test_loss = test(model, test_generator,epoch, device,writer=writer,f_loss=f_test_loss, elements=elements)
             
         except KeyError:
             print('Key Error problem')
@@ -474,7 +478,7 @@ def main():
         if early_stopping.early_stop:
             print("Early stopping")
             break
-        if epoch%1==0:
+        if epoch%100==0:
             torch.save(model.state_dict(), os.path.join(MODEL_PATH, args.NUM_EXP+'_model_'+str(epoch)))
     model.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint.pt')))
     torch.save(model.state_dict(), os.path.join(MODEL_PATH, args.NUM_EXP+'_model'+str(epoch)+'_fin'))
