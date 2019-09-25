@@ -388,7 +388,14 @@ class EarlyStopping:
         
 
 def main():
-    print(torch.__version__)
+    path = os.path.join(LOG_PATH,'/exp_'+args.num_exp)
+    try:
+        os.mkdir(path)
+    except OSError:
+        print ("Creation of the directory %s failed" % path)
+    else:
+        print ("Successfully created the directory %s " % path)
+        LOG_PATH = path
     # setting device on GPU if available, else CPU
     start_time=time.time()
     writer=SummaryWriter(LOG_PATH)
