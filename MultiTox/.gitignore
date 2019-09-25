@@ -1,0 +1,7 @@
+**/logs/
+**/logs_sigma/
+**/models/
+**/models_sigma/
+*.db
+*.txt
+*.csv

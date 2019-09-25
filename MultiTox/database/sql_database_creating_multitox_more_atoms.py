@@ -21,7 +21,7 @@ parser.add_argument("-n", "--num_confs",
                     dest="NUM_CONFS", default=100,
                     help="number of conformers to store",type=int)
 parser.add_argument("-f", "--filename",
-                    dest="FILENAME", default='Multitox0',
+                    dest="FILENAME", default='MultiTox0',
                     help="name of file to preprocess",type=str)
 
 

@@ -59,6 +59,6 @@ class Cube_dataset(td.Dataset):
             num_atom=self.elements[atom]
 
             for x0,y0,z0 in description[atom]:
-                cube[num_atom, floor(self.dim/2+x0/self.dx), floor(self.dim/2+y0/self.dx), floor(self.dim/2+z0/self.dx)]=1
+                cube[num_atom, min(self.dim -1,floor(self.dim/2+x0/self.dx)), min(self.dim -1,floor(self.dim/2+y0/self.dx)), min(self.dim -1,floor(self.dim/2+z0/self.dx))]=1
         X= cube
         return X, y
