@@ -3,29 +3,36 @@
 
 import numpy as np
 from rdkit import Chem
-import matplotlib.pyplot as plt
 import torch
+
 import sqlite3
 import glob
 import os
 
-#number of conformers created for every molecule
-global NUM_CONFS
-NUM_CONFS=100
 
-#amount of chemical elements taking into account
-global AMOUNT_OF_ELEM
-AMOUNT_OF_ELEM=6
+def create_element_dict(data,amount=9, add_H=False):
+    """Define what chemical elements are used in molecules
 
-#define what chemical elements are used in molecules
-#output - dictionary {element: number}
-def create_element_dict(data,amount=AMOUNT_OF_ELEM,treshold=10):
+        Parameters
+        ----------
+        data
+            pandas.DataFrame containing smiles of molecules in dataset
+        amount
+            Number of types of atoms to store
+        add_H
+            True or False: store info of H atoms or not        
+
+        Returns
+        -------
+        elements
+            dictionary with {atom name : number} mapping
+        """
     elements={}
     norm=0
     for smile in data['SMILES']:
         molecule=Chem.MolFromSmiles(smile)
         molecule=Chem.AddHs(molecule)
-        
+
         for i in range(molecule.GetNumAtoms()):
             atom = molecule.GetAtomWithIdx(i)
             element=atom.GetSymbol()
@@ -38,19 +45,26 @@ def create_element_dict(data,amount=AMOUNT_OF_ELEM,treshold=10):
         elements[key]/=norm
     from collections import OrderedDict
     dd = OrderedDict(sorted(elements.items(), key=lambda x: x[1]))
-    
-#    fig, axs = plt.subplots(1, 1, figsize=(6, 4), sharey=False, constrained_layout=True)
-#    axs.bar(list(dd.keys())[-amount:],list(dd.values())[-amount:])
-#    axs.set_ylabel('Relative amount of atoms in dataset',fontsize=12)
-#    axs.set_xticklabels(list(dd.keys())[-amount:],fontsize=15)
-
     elements=list(dd.keys())[-amount:]  
-    elements=dict((elem,i) for i, elem in enumerate(elements))            
+    elements=dict((elem,i) for i, elem in enumerate(elements))  
+    if not add_H:
+        del elements['H']
     return elements
 
-#reading data from sql database to dictionary
+
 def reading_sql_database(database_dir='./database'):
-    
+    """Reading data from sql database to dictionary
+
+        Parameters
+        ----------
+        database_dir
+            directory stored files in .db format
+        
+        Returns
+        -------
+        conf_calc
+            dictionary with {smile : conformer : {energy:, coordinates:}} information
+        """
     conf_calc={}
     
     for filename in glob.glob(os.path.join(database_dir,'*.db')):
@@ -76,9 +90,27 @@ def reading_sql_database(database_dir='./database'):
         conn.close()
     return conf_calc
 
-#set a number to each smile and get a dictionary indexing:{number:smile}
+#
 #and dictionary of labels for each smile label_dict {smile:labels}
 def indexing_label_dict(data,conf_calc):
+    """Set a number to each smile and get a dictionary indexing:{number:smile}
+    and dictionary of labels for each smile label_dict {smile:labels}
+
+        Parameters
+        ----------
+        data
+            pandas.DataFrame containing smiles of molecules in dataset
+            
+        conf_calc
+            dictionary with {smile : conformer : {energy:, coordinates:}} information
+        
+        Returns
+        -------
+        indexing
+            dictionary with {number:smile} mapping
+        label_dict
+            dictionary with {smile:labels} mapping
+        """
     props=list(data)
     props.remove('SMILES')
     label_dict={}

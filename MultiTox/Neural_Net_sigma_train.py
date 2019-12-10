@@ -13,6 +13,7 @@ from torchsummary import summary
 
 import sys 
 import os
+import glob
 
 from sklearn.model_selection import train_test_split
 
@@ -23,33 +24,27 @@ from sklearn.preprocessing import StandardScaler
 
 
 # number of conformers created for every molecule
-global NUM_CONFS
 NUM_CONFS = 100
 
 # amount of chemical elements taking into account
-global AMOUNT_OF_ELEM
 AMOUNT_OF_ELEM = 6
 
 
 # dimension of voxel with conformer
-global VOXEL_DIM
-VOXEL_DIM = 70
+VOXEL_DIM = 50
 
 # amount of target values
-global TARGET_NUM
 TARGET_NUM = 29
 
 #dataset folder
-global DATASET_PATH
 DATASET_PATH="~/Tox21-MultiTox/MultiTox"
 
 #logs path
-global LOG_PATH
-LOG_PATH="./logs_sigma/"
+
+LOG_PATH=os.path.join(DATASET_PATH,"logs_sigma/")
 
 #models path
-global MODEL_PATH
-MODEL_PATH="./models_sigma"
+MODEL_PATH=os.path.join(DATASET_PATH,"models_sigma/")
 
 
 #loss penalty
@@ -232,7 +227,7 @@ def test(model, test_generator,epoch,device,writer=None,f_loss=None, elements=No
 
 # create neural net
 class Net(nn.Module):
-    def __init__(self, dim=70, num_elems=6, num_targets=12, batch_size=args.BATCH_SIZE, aug = args.AUG, dx=0.5, kern_dim=50,elements=None,device='cpu',sigma_0=args.SIGMA):
+    def __init__(self, dim=VOXEL_DIM, num_elems=6, num_targets=12, batch_size=args.BATCH_SIZE, aug = args.AUG, dx=0.5, kern_dim=50,elements=None,device='cpu',sigma_0=args.SIGMA):
         super(Net, self).__init__()
         
         self.sigma = Parameter(sigma_0*torch.ones(num_elems).float().to(device),requires_grad=True)
@@ -363,6 +358,8 @@ class EarlyStopping:
         self.val_loss_min = np.Inf
 
     def __call__(self, val_loss, model):
+        
+        global MODEL_PATH
 
         score = -val_loss
 
@@ -388,15 +385,50 @@ class EarlyStopping:
         
 
 def main():
-    path = os.path.join(LOG_PATH,'/exp_'+args.num_exp)
-    try:
-        os.mkdir(path)
-    except OSError:
-        print ("Creation of the directory %s failed" % path)
-    else:
-        print ("Successfully created the directory %s " % path)
-        LOG_PATH = path
-    # setting device on GPU if available, else CPU
+    
+    global MODEL_PATH
+    global DATASET_PATH
+    global TARGET_NUM
+    global VOXEL_DIM
+    global AMOUNT_OF_ELEM
+    global LOG_PATH
+    global NUM_CONFS
+    
+#     path = os.path.join(LOG_PATH,'exp_'+args.NUM_EXP)
+#     original_umask = os.umask(0)
+#     os.makedirs(path, mode = 0o777, exist_ok =True)
+#     try:
+#         original_umask = os.umask(0)
+#         os.mkdir(path, mode = 0o777)
+#     except FileExistsError:
+#         files = os.listdir(path)
+#         for f in files:
+#             os.remove(os.path.join(path,f))
+        
+#     finally:
+#         os.umask(original_umask)
+#         LOG_PATH = path
+
+        
+#     path = os.path.join(MODEL_PATH,'exp_'+args.NUM_EXP)
+#     print(path)
+#     os.mkdir(path, 0o777)
+#     try:
+#         original_umask = os.umask(0)
+#         os.mkdir(path, 0o777)
+#         print('dir make')
+#     except FileExistsError:
+#         print('dir exists')
+#         files = os.listdir(path)
+        
+#         for f in files:
+#             os.remove(os.path.join(path,f))
+#     finally:
+#         print('finita')
+#         os.umask(original_umask)
+#         MODEL_PATH = path
+#     exit
+
     start_time=time.time()
     writer=SummaryWriter(LOG_PATH)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -410,7 +442,7 @@ def main():
         print('Cached:   ', round(torch.cuda.memory_cached(0)/1024**3,1), 'GB')
     print('Start loading dataset...')
     # get dataset without duplicates from csv
-    data = pd.read_csv(os.path.join(DATASET_PATH+'/database', 'MultiTox.csv'))
+    data = pd.read_csv(os.path.join(DATASET_PATH,'database', 'MultiTox.csv'))
     props = list(data)[1:]
     scaler = StandardScaler()
     data[props]=scaler.fit_transform(data[props])
@@ -441,10 +473,10 @@ def main():
     train_indexes, test_indexes, _, _ = train_test_split(np.arange(0, len(conf_calc.keys())),
                                                          np.arange(0, len(conf_calc.keys())), test_size=0.2,
                                                          random_state=115)
-    train_set = dl.Cube_dataset(conf_calc, label_dict, elements, indexing, train_indexes)
+    train_set = dl.Cube_dataset(conf_calc, label_dict, elements, indexing, train_indexes, dim = VOXEL_DIM)
     train_generator = td.DataLoader(train_set, batch_size=args.BATCH_SIZE, shuffle=True)
 
-    test_set = dl.Cube_dataset(conf_calc, label_dict, elements, indexing, test_indexes)
+    test_set = dl.Cube_dataset(conf_calc, label_dict, elements, indexing, test_indexes, dim = VOXEL_DIM)
     test_generator = td.DataLoader(test_set, batch_size=args.BATCH_SIZE, shuffle=False)
     
     model = Net(dim=VOXEL_DIM, num_elems=AMOUNT_OF_ELEM, num_targets=TARGET_NUM, batch_size=args.BATCH_SIZE,elements=elements, aug=args.AUG,device=device)
