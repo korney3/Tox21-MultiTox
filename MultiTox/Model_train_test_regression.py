@@ -6,6 +6,7 @@ import numpy as np
 import os
 
 
+import torch.nn.functional as F
 class Net(nn.Module):
     """
     The Net class constructs neural network with ActivNet4 architecture.
@@ -43,7 +44,7 @@ class Net(nn.Module):
     forward : function
         Apply neural network to batch of molecules
     """
-    def __init__(self, dim=70, 
+    def __init__(self, dim=70, kernel_size=51,
                  num_elems=6, 
                  num_targets=29, 
                  transformation='g', 
@@ -59,6 +60,8 @@ class Net(nn.Module):
         ----------
         dim : int
             Dimension of 3D cube where each type of atoms are stored
+        kernel_size : int
+            Size of convolution kernel for gauss or wave transformation
         num_elems : int
             Number of types of atoms represented molecule (number of cubes storing information about molecule's structure) 
         num_targets : int
@@ -92,6 +95,7 @@ class Net(nn.Module):
 
         # initialize dimensions
         self.dim = dim
+        self.kernel_size=kernel_size
         self.num_elems = num_elems
         self.num_targets = num_targets
         self.elements=elements
@@ -144,8 +148,8 @@ class Net(nn.Module):
 
         # initialize convolutional layers' weights
         self.convolution.apply(weights_init)
-        
-    def blur (self, batch):
+
+    def blur (self,batch):
         """ Applying Gauss or Wave transformation to batch of cubes
 
         Parameters
@@ -158,39 +162,45 @@ class Net(nn.Module):
         torch.Tensor 
             Tensor of shape (batch_size, num_elems, dim, dim ,dim) fulfilled with transformation
         """
+
         from math import floor
 
         dimx=self.dim
         dx=self.dx
         device=self.device
 
-        batch=batch.to(device)
-        dimelem=len(self.elements)
-        cube=torch.zeros(batch.shape)
-        cube=cube.to(device)
-
-        x = torch.arange(-dimx/2,dimx/2)
-
-        y = torch.arange(-dimx/2,dimx/2)
-        z = torch.arange(-dimx/2,dimx/2)
+        x = torch.arange(0,dimx+1).float()
+        y = torch.arange(0,dimx+1).float()
+        z = torch.arange(0,dimx+1).float()
         xx, yy, zz = torch.meshgrid((x,y,z))
-        x=x.to(device)
-        y=y.to(device)
-        z=z.to(device)
+        xx=xx.reshape(dimx+1,dimx+1,dimx+1,1)
+        yy=yy.reshape(dimx+1,dimx+1,dimx+1,1)
+        zz=zz.reshape(dimx+1,dimx+1,dimx+1,1)
+        xx = xx.repeat( 1, 1, 1,batch.shape[1])
+        yy = yy.repeat( 1, 1, 1, batch.shape[1])
+        zz = zz.repeat( 1, 1, 1, batch.shape[1])
+
         xx=xx.to(device)
         yy=yy.to(device)
-        zz=zz.to(device)
+        zz=zz.to(device)      
+        kernel_size=self.kernel_size
 
-        for idx,molecule in enumerate(batch):
+        mean = (kernel_size - 1)/2.
+        variance = self.sigma**2.
+        omega = 1/self.sigma
+        if self.transform=='g':
+          kernel = (1./(2.*np.pi*variance))*torch.exp(-((xx-mean)**2+(yy-mean)**2+(zz-mean)**2)/(2*variance))
+        if self.transform=='w':
+          kernel = torch.exp(-((xx-mean)**2+(yy-mean)**2+(zz-mean)**2)/(2*variance))*torch.cos(2*np.pi*omega*torch.sqrt(((xx-mean)**2+(yy-mean)**2+(zz-mean)**2)))
+        kernel=torch.transpose(kernel, 3,0)
+        kernel = kernel / torch.sum(kernel)
+        
+        kernel = kernel.view(1, 9, kernel_size, kernel_size, kernel_size)
 
-            for num_atom in range(dimelem):
-                for x0,y0,z0 in molecule[num_atom].nonzero():
-                    if self.transform=='g':
-                        cube[idx][num_atom] = cube[idx][num_atom] + torch.exp(-((xx-x0)**2 + (yy-y0)**2 + (zz-z0)**2)/(2*self.sigma[num_atom]**2))
-                    if self.transform=='w':
-                        cube[idx][num_atom] = cube[idx][num_atom] + torch.exp(-(xx**2 + yy**2 + zz**2)/(2*self.sigma[num_atom]**2))*torch.cos(2*np.pi/self.sigma[num_atom]*torch.sqrt(xx**2+yy**2+zz**2))
+        kernel = kernel.repeat( batch.shape[1],1,1,1,1)
+        res = F.conv3d(batch, weight=kernel, bias=None, padding=25)
 
-        return cube
+        return  res
 
     def forward(self, x):
         """ Applying Neural Network transformation to batch of molecules:
@@ -206,6 +216,7 @@ class Net(nn.Module):
         torch.Tensor 
             Tensor of shape (batch_size, num_targets) fulfilled with predicted values
         """
+
         x_cube = self.blur(x)
         x_conv = self.convolution(x_cube)
         x_vect = x_conv.view(x.shape[0], -1)
@@ -327,10 +338,20 @@ def train(model, optimizer, train_generator, epoch, device, batch_size, num_targ
         optimizer.step()
         train_loss+=loss.cpu().detach().numpy().item()
         
-        if batch_idx % 100 == 0:
+        if batch_idx % 1 == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_generator.dataset),
                        100. * batch_idx / len(train_generator), loss.item()))
+            if writer is not None:
+                writer.add_scalar('/iters/Train/Loss/', train_loss, batch_idx)
+            sigmas = model.sigma.cpu().detach().numpy()
+            for idx,sigma in enumerate(sigmas):
+                writer.add_scalar('/iters/Sigma/'+elems[idx], sigma, batch_idx)
+            losses/=num_losses    
+            for i,loss in enumerate(losses):
+                if f_loss_ch is not None and loss==loss:
+                    f_loss_ch.write(str(epoch)+'\t'+str(batch_idx)+'\t'+str(i)+'\t'+str(loss)+'\n')
+                    writer.add_scalar('/iters/Train/Loss/'+str(i), loss, batch_idx)
     train_loss /= len(train_generator.dataset)
     train_loss *= batch_size
     if writer is not None:
