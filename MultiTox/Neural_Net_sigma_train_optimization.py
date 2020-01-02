@@ -10,7 +10,6 @@ from torch.utils import data as td
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import Parameter
-from torchsummary import summary
 
 import sys 
 import os
@@ -21,7 +20,7 @@ from sklearn.model_selection import train_test_split
 from tensorboardX import SummaryWriter
 
 import time
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import MinMaxScaler#StandardScaler
 
 import json
 
@@ -40,17 +39,12 @@ TARGET_NUM = 29
 DATASET_PATH="./"
 
 #logs path
-
-LOG_PATH=os.path.join(DATASET_PATH,"logs_sigma")
+LOG_PATH=os.path.join(DATASET_PATH,"logs_sigma_right")
 
 
 #models path
-MODEL_PATH=os.path.join(DATASET_PATH,"models_sigma")
+MODEL_PATH=os.path.join(DATASET_PATH,"models_sigma_right")
 
-
-#loss penalty
-#global PENALTY
-#PENALTY = torch.FloatTensor([0.1,0.2,0.4,0.4,0.4,0.2,0.2,0.6,0.2,0.3,0.6,0.2])
 
 from argparse import ArgumentParser
 
@@ -61,8 +55,8 @@ parser.add_argument("-p", "--patience",
                     dest="PATIENCE", default=25,
                     help="number of epochs to wait before early stopping",type=int)
 parser.add_argument("-s", "--sigma",
-                    dest="SIGMA", default=12,
-                    help="sigma parameter",type=int)
+                    dest="SIGMA", default=1.2,
+                    help="sigma parameter",type=float)
 parser.add_argument("-b", "--batch_size",
                     dest="BATCH_SIZE", default=32,
                     help="size of train and test batches",type=int)
@@ -106,7 +100,6 @@ args = parser.parse_args()
 
 
 def main():
-    
     global MODEL_PATH
     global DATASET_PATH
     global TARGET_NUM
@@ -160,16 +153,32 @@ def main():
     # get dataset without duplicates from csv
     data = pd.read_csv(os.path.join(DATASET_PATH,'database', 'MultiTox.csv'))
     props = list(data)[1:]
-    scaler = StandardScaler()
+    scaler = MinMaxScaler()
     data[props]=scaler.fit_transform(data[props])
 
     # create elements dictionary
-    elements = ld.create_element_dict(data, amount=AMOUNT_OF_ELEM+1)
-
+#     elements = ld.create_element_dict(data, amount=AMOUNT_OF_ELEM+1)
+    elements={'N':0,'C':1,'Cl':2,'I':3,'Br':4,'F':5,'O':6,'P':7,'S':8}
+    
     # read databases to dictionary
-    conf_calc = ld.reading_sql_database(database_dir='./dat/')
+#     conf_calc = ld.reading_sql_database(database_dir='./dat/')
+    with open(os.path.join(DATASET_PATH,'many_elems.json'), 'r') as fp:
+        conf_calc = json.load(fp)
+    
     keys=list(conf_calc.keys())
     print ('Initial dataset size = ', len(keys))
+    
+    new_conf_calc={}
+    for smiles in conf_calc.keys():
+        for conf_num in conf_calc[smiles]:
+            if smiles in new_conf_calc.keys():
+                new_conf_calc[smiles][int(conf_num)]=conf_calc[smiles][conf_num]
+            else:
+                new_conf_calc[smiles]={}
+                new_conf_calc[smiles][int(conf_num)]=conf_calc[smiles][conf_num]
+
+    conf_calc=new_conf_calc
+    
     elems = []
     for key in keys:
         conformers=list(conf_calc[key].keys())
@@ -179,8 +188,9 @@ def main():
                 elems = list(set(elems+list(conf_calc[key][conformer]['coordinates'].keys())))
             except:
                 del conf_calc[key][conformer]
-            
-        if conf_calc[key]=={}:
+        if set(conf_calc[key].keys())!=set(range(100)):
+              del conf_calc[key]
+        elif conf_calc[key]=={}:
             del conf_calc[key]
 
     print ('Post-processed dataset size = ', len(list(conf_calc.keys())))
@@ -227,7 +237,7 @@ def main():
     # train procedure
     for epoch in range(1, args.EPOCHS_NUM + 1):
         try:
-            train(model, optimizer, train_generator, epoch,device,writer=writer,f_loss=f_train_loss,f_loss_ch=f_train_loss_ch, elements=elements,batch_size = args.BATCH_SIZE)
+            train(model, optimizer, train_generator, epoch,device,writer=writer,f_loss=f_train_loss,f_loss_ch=f_train_loss_ch, elements=elements,batch_size = args.BATCH_SIZE,MODEL_PATH=MODEL_PATH)
             test_loss = test(model, test_generator,epoch, device,writer=writer,f_loss=f_test_loss, elements=elements,batch_size = args.BATCH_SIZE)
             early_stopping(test_loss, model)
 
