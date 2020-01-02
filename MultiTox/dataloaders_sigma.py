@@ -43,7 +43,7 @@ class Cube_dataset(td.Dataset):
     dim : int
         Size of cube
     """
-    def __init__(self,conf_calc,label_dict,elements,indexing, indexes,dx=0.5,dim=70):
+    def __init__(self,conf_calc,label_dict,elements,indexing, indexes,dx=0.5,dim=70,print_name=False):
         self.Xs=conf_calc
         self.Ys=label_dict
         self.elements=elements
@@ -51,6 +51,7 @@ class Cube_dataset(td.Dataset):
         self.dx = dx
         self.indexes=indexes
         self.dim = dim
+        self.print_name = print_name
 
     def __len__(self):
         'Denotes the total number of samples'
@@ -65,6 +66,9 @@ class Cube_dataset(td.Dataset):
         
         i=self.indexes[index]
         smiles=self.indexing[i]
+        
+        if self.print_name:
+            print(smiles)
         
         y= self.Ys[smiles]
 

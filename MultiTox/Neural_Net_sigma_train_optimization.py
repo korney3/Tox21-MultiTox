@@ -140,7 +140,7 @@ def main():
         MODEL_PATH = path
     start_time=time.time()
     writer=SummaryWriter(LOG_PATH)
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     print('Using device:', device)
     print()
     #Additional Info when using cuda
@@ -211,6 +211,10 @@ def main():
     test_generator = td.DataLoader(test_set, batch_size=args.BATCH_SIZE, shuffle=True)
     
     model = Net(dim=args.VOXEL_DIM, num_elems=AMOUNT_OF_ELEM, num_targets=TARGET_NUM, elements=elements, transformation=args.TRANSF,device=device,sigma_0 = args.SIGMA,sigma_trainable = True)
+    if torch.cuda.device_count() > 1:
+        model = nn.DataParallel(model)
+        print ('Run in parallel!')
+    model=model.to(device)
 
 
     # Construct our model by instantiating the class defined above

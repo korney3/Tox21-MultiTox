@@ -195,10 +195,10 @@ class Net(nn.Module):
         kernel=torch.transpose(kernel, 3,0)
         kernel = kernel / torch.sum(kernel)
         
-        kernel = kernel.view(1, 9, kernel_size, kernel_size, kernel_size)
+        kernel = kernel.view( len(self.sigma), 1, kernel_size, kernel_size, kernel_size)
 
-        kernel = kernel.repeat( batch.shape[1],1,1,1,1)
-        res = F.conv3d(batch, weight=kernel, bias=None, padding=25)
+#         kernel = kernel.repeat( batch.shape[1],1,1,1,1)
+        res = F.conv3d(batch, weight=kernel, bias=None, padding=25,groups=len(self.sigma))
 
         return  res
 
