@@ -1,10 +1,7 @@
 **/logs/
 **/logs_sigma/
-**/logs_sigma_right/
 **/models/
 **/models_sigma/
-**/models_sigma_right/
 *.db
 *.txt
 *.csv
-*.out

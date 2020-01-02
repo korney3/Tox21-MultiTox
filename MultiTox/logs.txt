@@ -1,0 +1,58 @@
+[16:36:31] Conflicting single bond directions around double bond at index 1.
+[16:36:31]   BondStereo set to STEREONONE and single bond directions set to NONE.
+[16:36:31] Conflicting single bond directions around double bond at index 1.
+[16:36:31]   BondStereo set to STEREONONE and single bond directions set to NONE.
+[16:36:31] Conflicting single bond directions around double bond at index 1.
+[16:36:31]   BondStereo set to STEREONONE and single bond directions set to NONE.
+1.2.0
+Using device: cuda
+
+GeForce GTX 1080
+Memory Usage:
+Allocated: 0.0 GB
+Cached:    0.0 GB
+Start loading dataset...
+Initial dataset size =  8323
+Post-processed dataset size =  8323
+Dataset has been loaded
+Neural network initialization...
+sigma <class 'torch.Tensor'> torch.Size([6])
+conv1.weight <class 'torch.Tensor'> torch.Size([32, 6, 3, 3, 3])
+conv1.bias <class 'torch.Tensor'> torch.Size([32])
+conv2.weight <class 'torch.Tensor'> torch.Size([64, 32, 3, 3, 3])
+conv2.bias <class 'torch.Tensor'> torch.Size([64])
+conv3.weight <class 'torch.Tensor'> torch.Size([128, 64, 3, 3, 3])
+conv3.bias <class 'torch.Tensor'> torch.Size([128])
+conv4.weight <class 'torch.Tensor'> torch.Size([256, 128, 3, 3, 3])
+conv4.bias <class 'torch.Tensor'> torch.Size([256])
+fc1.weight <class 'torch.Tensor'> torch.Size([1024, 2048])
+fc1.bias <class 'torch.Tensor'> torch.Size([1024])
+fc2.weight <class 'torch.Tensor'> torch.Size([29, 1024])
+fc2.bias <class 'torch.Tensor'> torch.Size([29])
+Neural network has been initialized
+Train Epoch: 1 [0/6658 (0%)]	Loss: 1.009994
+Train Epoch: 1 [1000/6658 (15%)]	Loss: 0.833147
+Train Epoch: 1 [2000/6658 (30%)]	Loss: 0.526204
+Train Epoch: 1 [3000/6658 (45%)]	Loss: 1.077833
+Train Epoch: 1 [4000/6658 (60%)]	Loss: 0.580876
+Train Epoch: 1 [5000/6658 (75%)]	Loss: 3.168005
+Train Epoch: 1 [6000/6658 (90%)]	Loss: 0.119004
+
+Test set: Average loss: 0.8268
+
+Validation loss decreased (inf --> 0.826781).  Saving model ...
+Train Epoch: 2 [0/6658 (0%)]	Loss: 0.382252
+Train Epoch: 2 [1000/6658 (15%)]	Loss: 0.168356
+Train Epoch: 2 [2000/6658 (30%)]	Loss: 0.408896
+Traceback (most recent call last):
+  File "Neural_Net_sigma_train.py", line 490, in <module>
+    sys.exit(main()) 
+  File "Neural_Net_sigma_train.py", line 471, in main
+    train(model, optimizer, train_generator, epoch,device,writer=writer,f_loss=f_train_loss,f_loss_ch=f_train_loss_ch, elements=elements)
+  File "Neural_Net_sigma_train.py", line 156, in train
+    loss.backward()
+  File "/home/alisa/anaconda3/lib/python3.7/site-packages/torch/tensor.py", line 118, in backward
+    torch.autograd.backward(self, gradient, retain_graph, create_graph)
+  File "/home/alisa/anaconda3/lib/python3.7/site-packages/torch/autograd/__init__.py", line 93, in backward
+    allow_unreachable=True)  # allow_unreachable flag
+RuntimeError: CUDA out of memory. Tried to allocate 384.00 MiB (GPU 0; 7.92 GiB total capacity; 4.13 GiB already allocated; 307.50 MiB free; 396.68 MiB cached)
