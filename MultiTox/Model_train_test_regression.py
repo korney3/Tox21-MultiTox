@@ -269,7 +269,7 @@ class EarlyStopping:
         torch.save(model.state_dict(), os.path.join(self.model_path,'checkpoint.pt'))
         self.val_loss_min = val_loss
     
-def train(model, optimizer, train_generator, epoch, device, batch_size, num_targets=29, writer = None,f_loss=None,f_loss_ch = None, elements=None):
+def train(model, optimizer, train_generator, epoch, device, batch_size, num_targets=29, writer = None,f_loss=None,f_loss_ch = None, elements=None, MODEL_PATH=None):
     """ Train model and write logs to tensorboard and .txt files
 
         Parameters
@@ -343,7 +343,7 @@ def train(model, optimizer, train_generator, epoch, device, batch_size, num_targ
                 epoch, batch_idx * len(data), len(train_generator.dataset),
                        100. * batch_idx / len(train_generator), loss.item()))
             if writer is not None:
-                writer.add_scalar('/iters/Train/Loss/', train_loss, batch_idx)
+                writer.add_scalar('iters/Train/Loss/', train_loss, batch_idx)
             sigmas = model.sigma.cpu().detach().numpy()
             for idx,sigma in enumerate(sigmas):
                 writer.add_scalar('/iters/Sigma/'+elems[idx], sigma, batch_idx)
@@ -352,6 +352,9 @@ def train(model, optimizer, train_generator, epoch, device, batch_size, num_targ
                 if f_loss_ch is not None and loss==loss:
                     f_loss_ch.write(str(epoch)+'\t'+str(batch_idx)+'\t'+str(i)+'\t'+str(loss)+'\n')
                     writer.add_scalar('/iters/Train/Loss/'+str(i), loss, batch_idx)
+            if MODEL_PATH is not None:
+                torch.save(model.state_dict(), os.path.join(MODEL_PATH,'checkpoint.pt'))
+                
     train_loss /= len(train_generator.dataset)
     train_loss *= batch_size
     if writer is not None:
