@@ -214,7 +214,6 @@ def main():
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
         print ('Run in parallel!')
-    model=model.to(device)
 
 
     # Construct our model by instantiating the class defined above

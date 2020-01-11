@@ -167,8 +167,10 @@ class Net(nn.Module):
 
         dimx=self.dim
         dx=self.dx
-        device=self.device
-
+        device=self.sigma.device
+        kernel_size=self.kernel_size
+        
+        
         x = torch.arange(0,dimx+1).float()
         y = torch.arange(0,dimx+1).float()
         z = torch.arange(0,dimx+1).float()
@@ -176,29 +178,28 @@ class Net(nn.Module):
         xx=xx.reshape(dimx+1,dimx+1,dimx+1,1)
         yy=yy.reshape(dimx+1,dimx+1,dimx+1,1)
         zz=zz.reshape(dimx+1,dimx+1,dimx+1,1)
-        xx = xx.repeat( 1, 1, 1,batch.shape[1])
-        yy = yy.repeat( 1, 1, 1, batch.shape[1])
-        zz = zz.repeat( 1, 1, 1, batch.shape[1])
+        xx = xx.repeat( 1, 1, 1, self.num_elems)
+        yy = yy.repeat( 1, 1, 1, self.num_elems)
+        zz = zz.repeat( 1, 1, 1, self.num_elems)
 
         xx=xx.to(device)
         yy=yy.to(device)
-        zz=zz.to(device)      
-        kernel_size=self.kernel_size
-
+        zz=zz.to(device)         
+        
         mean = (kernel_size - 1)/2.
         variance = self.sigma**2.
         omega = 1/self.sigma
         if self.transform=='g':
-          kernel = (1./(2.*np.pi*variance))*torch.exp(-((xx-mean)**2+(yy-mean)**2+(zz-mean)**2)/(2*variance))
+            a = (1./(2.*np.pi*variance))
+            b = -((xx-mean)**2+(yy-mean)**2+(zz-mean)**2)/(2*variance)
+            kernel = a*torch.exp(b)
         if self.transform=='w':
           kernel = torch.exp(-((xx-mean)**2+(yy-mean)**2+(zz-mean)**2)/(2*variance))*torch.cos(2*np.pi*omega*torch.sqrt(((xx-mean)**2+(yy-mean)**2+(zz-mean)**2)))
         kernel=torch.transpose(kernel, 3,0)
         kernel = kernel / torch.sum(kernel)
         
-        kernel = kernel.view( len(self.sigma), 1, kernel_size, kernel_size, kernel_size)
-
-#         kernel = kernel.repeat( batch.shape[1],1,1,1,1)
-        res = F.conv3d(batch, weight=kernel, bias=None, padding=25,groups=len(self.sigma))
+        kernel = kernel.view(self.num_elems, 1, kernel_size, kernel_size, kernel_size)
+        res = F.conv3d(batch, weight=kernel, bias=None, padding=25,groups=self.num_elems)
 
         return  res
 
@@ -266,7 +267,10 @@ class EarlyStopping:
         '''Saves model when validation loss decrease.'''
         if self.verbose:
             print(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...')
-        torch.save(model.state_dict(), os.path.join(self.model_path,'checkpoint.pt'))
+        if torch.cuda.device_count() > 1:
+            torch.save(model.module.state_dict(), os.path.join(self.model_path,'checkpoint.pt'))
+        else:
+            torch.save(model.state_dict(), os.path.join(self.model_path,'checkpoint.pt'))
         self.val_loss_min = val_loss
     
 def train(model, optimizer, train_generator, epoch, device, batch_size, num_targets=29, writer = None,f_loss=None,f_loss_ch = None, elements=None, MODEL_PATH=None):
@@ -344,7 +348,10 @@ def train(model, optimizer, train_generator, epoch, device, batch_size, num_targ
                        100. * batch_idx / len(train_generator), loss.item()))
             if writer is not None:
                 writer.add_scalar('iters/Train/Loss/', train_loss, batch_idx)
-            sigmas = model.sigma.cpu().detach().numpy()
+            if torch.cuda.device_count() > 1:
+                sigmas = model.module.sigma.cpu().detach().numpy()
+            else:
+                sigmas = model.sigma.cpu().detach().numpy()
             for idx,sigma in enumerate(sigmas):
                 writer.add_scalar('/iters/Sigma/'+elems[idx], sigma, batch_idx)
             losses/=num_losses    
@@ -353,13 +360,20 @@ def train(model, optimizer, train_generator, epoch, device, batch_size, num_targ
                     f_loss_ch.write(str(epoch)+'\t'+str(batch_idx)+'\t'+str(i)+'\t'+str(loss)+'\n')
                     writer.add_scalar('/iters/Train/Loss/'+str(i), loss, batch_idx)
             if MODEL_PATH is not None:
-                torch.save(model.state_dict(), os.path.join(MODEL_PATH,'checkpoint.pt'))
+                if torch.cuda.device_count() > 1:
+                    torch.save(model.module.state_dict(), os.path.join(MODEL_PATH,'checkpoint.pt'))
+                else:
+                    torch.save(model.state_dict(), os.path.join(MODEL_PATH,'checkpoint.pt'))
+         
                 
     train_loss /= len(train_generator.dataset)
     train_loss *= batch_size
     if writer is not None:
         writer.add_scalar('Train/Loss/', train_loss, epoch)
-    sigmas = model.sigma.cpu().detach().numpy()
+    if torch.cuda.device_count() > 1:
+        sigmas = model.module.sigma.cpu().detach().numpy()
+    else:
+        sigmas = model.sigma.cpu().detach().numpy()
     for idx,sigma in enumerate(sigmas):
         writer.add_scalar('Sigma/'+elems[idx], sigma, epoch)
     losses/=num_losses    
