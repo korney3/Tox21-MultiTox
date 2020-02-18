@@ -5,3 +5,4 @@
 1. Add sigma.train parameter
 2. Rewrite slurm script with parameters inside the script
 3. Run jupyter lab for debug session
+4. Create RSA keys and alias for connection
