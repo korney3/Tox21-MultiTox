@@ -8,7 +8,7 @@
 
 ~~3. Run jupyter lab for debug session~~
 
-4. Create RSA keys and alias for connection
+~~4. Create RSA keys and alias for connection~~
 
 5. Recalcualte all databases with cpus and store in gpfs
 
