@@ -52,7 +52,9 @@ class Net(nn.Module):
                  elements=None,
                  device='cpu',
                  sigma_trainable = False,
-                 sigma_0=3):
+                 sigma_0=3, 
+                 x_trainable = False,
+                 x_input=None):
         """
         Initialize neural network.
 
@@ -87,8 +89,15 @@ class Net(nn.Module):
             self.sigma = Parameter(sigma_0*torch.ones(num_elems).float().to(device),requires_grad=True)
             self.register_parameter('sigma',self.sigma)
         else:
-            self.sigma = sigma_0*torch.ones(num_elems).float().to(device)
-            self.register_buffer('sigma',self.sigma)
+#             self.sigma = 
+            self.register_buffer('sigma', sigma_0*torch.ones(num_elems).float().to(device))
+            
+        if x_trainable:
+            self.x_input = Parameter(x_input.to(device),requires_grad=True)
+            self.register_parameter('x_input',self.x_input)
+        else:
+#             self.x_input = 
+            self.register_buffer('x_input',torch.zeros(1, num_elems, dim, dim, dim).float().to(device))
         
 
 
@@ -194,13 +203,13 @@ class Net(nn.Module):
             b = -((xx-mean)**2+(yy-mean)**2+(zz-mean)**2)/(2*variance)
             kernel = a*torch.exp(b)
         if self.transform=='w':
-          kernel = torch.exp(-((xx-mean)**2+(yy-mean)**2+(zz-mean)**2)/(2*variance))*torch.cos(2*np.pi*omega*torch.sqrt(((xx-mean)**2+(yy-mean)**2+(zz-mean)**2)))
+            kernel = torch.exp(-((xx-mean)**2+(yy-mean)**2+(zz-mean)**2)/(2*variance))*torch.cos(2*np.pi*omega*torch.sqrt(((xx-mean)**2+(yy-mean)**2+(zz-mean)**2)))
         kernel=torch.transpose(kernel, 3,0)
         kernel = kernel / torch.sum(kernel)
         
         kernel = kernel.view(self.num_elems, 1, kernel_size, kernel_size, kernel_size)
         res = F.conv3d(batch, weight=kernel, bias=None, padding=25,groups=self.num_elems)
-
+        res = res/res.max()
         return  res
 
     def forward(self, x):
