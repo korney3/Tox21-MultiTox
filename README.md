@@ -2,7 +2,7 @@
 
 ## 18.02.2020
 
-1. Add sigma.train parameter
+~~1. Add sigma.train parameter~~
 
 2. Rewrite slurm script with parameters inside the script
 
