@@ -12,3 +12,7 @@
 
 5. Recalcualte all databases with cpus and store in gpfs
 
+## Materials
+https://github.com/utkuozbulak/pytorch-cnn-visualizations
+https://pytorch.org/tutorials/advanced/neural_style_tutorial.html
+
