@@ -1,4 +1,4 @@
-#!/bin/bash -l 
+#!/bin/bash -l
 
 #SBATCH --mem=20000
 
@@ -9,4 +9,4 @@ module load python/pytorch-1.3.0
 module rm python/python-3.6.8
 module list
 
-python Neural_Net_sigma_train_optimization.py -n 24 -b 128 -t g -s 1.4
+python Neural_Net_sigma_train_optimization.py -n 23 -b 128 -t w -s 3

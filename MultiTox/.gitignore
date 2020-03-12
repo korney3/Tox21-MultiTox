@@ -9,3 +9,4 @@
 *.csv
 *.out
 *.json
+**/.ipynb_checkpoints/

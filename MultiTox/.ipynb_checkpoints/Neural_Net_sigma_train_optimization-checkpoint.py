@@ -72,7 +72,7 @@ parser.add_argument("-v", "--voxel_dim",
 parser.add_argument("-r", "--learn_rate",
                     dest="LEARN_RATE", default=1e-5,
                     help="learning rate for optimizer",type=float)
-parser.add_argument("-r", "--sigma_train",
+parser.add_argument("-a", "--sigma_train",
                     dest="SIGMA_TRAIN", default=False,
                     help="Regime of training sigma",type=bool)
 
@@ -141,10 +141,15 @@ def main():
         print('finita')
         os.umask(original_umask)
         MODEL_PATH = path
+        
+    f_log=open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'w')
+    f_log.close()
     start_time=time.time()
     writer=SummaryWriter(LOG_PATH)
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     print('Using device:', device)
+    with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+        f_log.write('Using device:'+str(device)+'\n')
     print()
     #Additional Info when using cuda
     if device.type == 'cuda':
@@ -152,7 +157,12 @@ def main():
         print('Memory Usage:')
         print('Allocated:', round(torch.cuda.memory_allocated(0)/1024**3,1), 'GB')
         print('Cached:   ', round(torch.cuda.memory_cached(0)/1024**3,1), 'GB')
+        
+        with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+            f_log.write(torch.cuda.get_device_name(0)+'\n'+'Memory Usage:'+'\n'+'Allocated:'+str(round(torch.cuda.memory_allocated(0)/1024**3,1))+ 'GB'+'\n'+'Cached:   '+str(round(torch.cuda.memory_cached(0)/1024**3,1))+'GB'+'\n')
     print('Start loading dataset...')
+    with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+        f_log.write('Start loading dataset...'+'\n')
     # get dataset without duplicates from csv
     data = pd.read_csv(os.path.join(DATASET_PATH,'database', 'MultiTox.csv'))
     props = list(data)[1:]
@@ -170,7 +180,8 @@ def main():
     
     keys=list(conf_calc.keys())
     print ('Initial dataset size = ', len(keys))
-    
+    with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+        f_log.write('Initial dataset size = '+str(len(keys))+'\n')
     new_conf_calc={}
     for smiles in conf_calc.keys():
         for conf_num in conf_calc[smiles]:
@@ -197,13 +208,19 @@ def main():
             del conf_calc[key]
 
     print ('Post-processed dataset size = ', len(list(conf_calc.keys())))
+    with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+        f_log.write('Post-processed dataset size = '+str(len(list(conf_calc.keys())))+'\n')
     # create indexing and label_dict for iteration
     indexing, label_dict = ld.indexing_label_dict(data, conf_calc)
     print('Dataset has been loaded, ', int(time.time()-start_time),' s')
+    with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+        f_log.write('Dataset has been loaded, '+str(int(time.time()-start_time))+' s'+'\n')
+    
     start_time=time.time()
     # create train and validation sets' indexes
     print('Neural network initialization...')
-    
+    with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+        f_log.write('Neural network initialization...'+'\n')
     train_indexes, test_indexes, _, _ = train_test_split(np.arange(0, len(conf_calc.keys())),
                                                          np.arange(0, len(conf_calc.keys())), test_size=0.2,
                                                          random_state=115)
@@ -214,14 +231,29 @@ def main():
     test_generator = td.DataLoader(test_set, batch_size=args.BATCH_SIZE, shuffle=True)
     
     model = Net(dim=args.VOXEL_DIM, num_elems=AMOUNT_OF_ELEM, num_targets=TARGET_NUM, elements=elements, transformation=args.TRANSF,device=device,sigma_0 = args.SIGMA,sigma_trainable = args.SIGMA_TRAIN)
+    
+    with open(os.path.join(LOG_PATH,args.NUM_EXP+'_parameters.json'),'w') as f:
+        json.dump(vars(args), f)
+    
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
         print ('Run in parallel!')
-
+        with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+            f_log.write('Run in parallel!'+'\n')
 
     # Construct our model by instantiating the class defined above
 
     model=model.to(device)
+    
+    for (batch, target) in train_generator:
+        batch = batch.to(device)
+        target = target.to(device)
+        with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+            f_log.write('Batch to device!'+'\n')
+        output = model(batch)
+        with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+            f_log.write('Batch output!'+'\n')
+        break
 
     for name, param in model.named_parameters():
         print(name, type(param.data), param.size())
@@ -229,9 +261,10 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=args.LEARN_RATE)
 
     print('Neural network has been initialized, ', int(time.time()-start_time),' s')
+    with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+            f_log.write('Neural network has been initialized, '+str(int(time.time()-start_time))+' s'+'\n')
+
     
-    with open(os.path.join(LOG_PATH,args.NUM_EXP+'_parameters.json'),'w') as f:
-        json.dump(vars(args), f)
     
     f_train_loss=open(os.path.join(LOG_PATH,args.NUM_EXP+'_log_train_loss.txt'),'w')
     f_train_loss_ch=open(os.path.join(LOG_PATH,args.NUM_EXP+'_log_train_loss_channels.txt'),'w')
@@ -242,6 +275,8 @@ def main():
     start_time=time.time()
     # train procedure
     for epoch in range(1, args.EPOCHS_NUM + 1):
+        with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+            f_log.write('Epoch , '+str(epoch)+'\n')
         try:
             train(model, optimizer, train_generator, epoch,device,writer=writer,f_loss=f_train_loss,f_loss_ch=f_train_loss_ch, elements=elements,batch_size = args.BATCH_SIZE,MODEL_PATH=MODEL_PATH)
             test_loss = test(model, test_generator,epoch, device,writer=writer,f_loss=f_test_loss, elements=elements,batch_size = args.BATCH_SIZE)
@@ -250,7 +285,7 @@ def main():
             if early_stopping.early_stop:
                 print(epoch,"Early stopping")
                 break
-            if epoch%100==0:
+            if epoch%10==0:
                 torch.save(model.state_dict(), os.path.join(MODEL_PATH, args.NUM_EXP+'_model_'+str(epoch)))
         except KeyError:
             print(epoch,'Key Error problem')

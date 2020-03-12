@@ -1,7 +1,4 @@
-#!/bin/bash -l 
-
-#SBATCH --mem=20000
-
+#!/bin/bash -l
 
 module load python/python-3.7.1
 module load gpu/cuda-10.0
@@ -9,4 +6,4 @@ module load python/pytorch-1.3.0
 module rm python/python-3.6.8
 module list
 
-python Neural_Net_sigma_train_optimization.py -n 24 -b 128 -t g -s 1.4
+python Neural_Net_sigma_train_optimization.py -n 21 -b 128 -s 3 -t w > logs.txt
