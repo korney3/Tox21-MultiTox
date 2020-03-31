@@ -61,27 +61,35 @@ python Neural_Net_sigma_train_optimization.py [flags]
 Flags:
 "-e", "--epochs", dest="EPOCHS_NUM",
                     help="number of train epochs",default = 100,type=int
+                    
 "-p", "--patience",
                     dest="PATIENCE", default=25,
                     help="number of epochs to wait before early stopping",type=int
+                    
 "-s", "--sigma",
                     dest="SIGMA", default=1.2,
                     help="sigma parameter",type=float
+                    
 "-b", "--batch_size",
                     dest="BATCH_SIZE", default=32,
                     help="size of train and test batches",type=int
+                    
 "-t", "--transformation",
                     dest="TRANSF", default='g',choices =['g', 'w'],
                     help="type of augmentstion - g (gauss) or w (waves)"
+                    
 "-n", "--num_exp",
                     dest="NUM_EXP", default='',
                     help="number of current experiment"
+                    
 "-v", "--voxel_dim",
                     dest="VOXEL_DIM", default=50,
                     help="size of produced voxel cube"
+                    
 "-r", "--learn_rate",
                     dest="LEARN_RATE", default=1e-5,
                     help="learning rate for optimizer",type=float
+                    
 "-a", "--sigma_train",
                     dest="SIGMA_TRAIN", default=False,
                     help="Regime of training sigma",type=bool
