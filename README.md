@@ -1,4 +1,4 @@
-# Predicting the acute toxicity of organic molecules using 3D-convolutional neural networks
+# Predicting the acute toxicity of organic molecules using 3D-convolutional neural networks (in progress)
 
 The project demonstrates the application of Neural Networks to prediction of the toxicity - complex bio-chemical property of an organic molecule. Due
 to sparse voxel representation of molecules are not suitable for CNN inputs two types of transformations were used: with Waves and Gaussian
