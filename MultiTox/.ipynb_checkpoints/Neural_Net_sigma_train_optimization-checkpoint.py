@@ -164,7 +164,7 @@ def main():
     with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
         f_log.write('Start loading dataset...'+'\n')
     # get dataset without duplicates from csv
-    data = pd.read_csv(os.path.join(DATASET_PATH,'database', 'MultiTox.csv'))
+    data = pd.read_csv(os.path.join(DATASET_PATH,'database/data', 'MultiTox.csv'))
     props = list(data)[1:]
     scaler = MinMaxScaler()
     data[props]=scaler.fit_transform(data[props])

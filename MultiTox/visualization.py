@@ -81,3 +81,52 @@ def molecule_visualization2D(minibatch2D):
         plt.imshow(batch,interpolation='none',cmap='rainbow')
         plt.colorbar()
         plt.show()
+        
+def plot_visualization_input_as_parameter(model,elements,grad_step=10**3,name=''):
+    import matplotlib.pyplot as plt
+    inv_elems = {v: k for k, v in elements.items()}
+    print(name)
+
+    fig,ax = plt.subplots(1,3,figsize=(15,5))
+    
+    data=model.x_input
+    
+    ax[0].imshow(data.cpu().detach().sum(dim=0).sum(dim=0).sum(dim=0))
+    ax[0].set_title('Molecule projection')
+    ax[1].imshow((data-grad_step*data.grad).cpu().detach().sum(dim=0).sum(dim=0).sum(dim=0))
+    ax[1].set_title('Molecule Gradient descent')
+    with torch.no_grad():
+        gauss_blur = model.blur(data)
+
+    ax[2].imshow(gauss_blur.cpu().detach().sum(dim=0).sum(dim=0).sum(dim=0))
+    ax[2].set_title('Blurred molecule')
+    plt.show()
+    
+    molecules = data.cpu().detach().sum(dim=0)
+
+    fig,ax = plt.subplots(3,3,figsize=(15,15))
+    for i,grad in enumerate(molecules):
+        ax[i//3,i%3].imshow(grad.sum(dim=0))
+        ax[i//3,i%3].set_title(inv_elems[i])
+    fig.suptitle('Atom types in molecule')
+    plt.show()
+    
+    molecules_blur = gauss_blur.cpu().detach().sum(dim=0)
+
+    fig,ax = plt.subplots(3,3,figsize=(15,15))
+    for i,grad in enumerate(molecules_blur):
+        ax[i//3,i%3].imshow(grad.sum(dim=0))
+        ax[i//3,i%3].set_title(inv_elems[i])
+    fig.suptitle('Blurred atom types in molecule')
+    plt.show()
+    
+    grads = data.grad.cpu().detach().sum(dim=0)
+
+    fig,ax = plt.subplots(3,3,figsize=(15,15))
+    for i,grad in enumerate(grads):
+        ax[i//3,i%3].imshow(grad.sum(dim=0))
+        ax[i//3,i%3].set_title(inv_elems[i])
+    fig.suptitle('Grads for atom types in molecule')    
+    plt.show()
+    
+    
