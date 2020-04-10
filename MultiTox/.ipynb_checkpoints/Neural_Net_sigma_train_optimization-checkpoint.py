@@ -174,9 +174,9 @@ def main():
     elements={'N':0,'C':1,'Cl':2,'I':3,'Br':4,'F':5,'O':6,'P':7,'S':8}
     
     # read databases to dictionary
-#     conf_calc = ld.reading_sql_database(database_dir='./dat/')
-    with open(os.path.join(DATASET_PATH,'many_elems.json'), 'r') as fp:
-        conf_calc = json.load(fp)
+    conf_calc = ld.reading_sql_database(database_dir='./database/data/')
+#     with open(os.path.join(DATASET_PATH,'many_elems.json'), 'r') as fp:
+#         conf_calc = json.load(fp)
     
     keys=list(conf_calc.keys())
     print ('Initial dataset size = ', len(keys))
