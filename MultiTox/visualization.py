@@ -111,6 +111,9 @@ def plot_visualization_input_as_parameter(model,elements,grad_step=10**3,name=''
     fig.suptitle('Atom types in molecule')
     plt.show()
     
+    return fig, ax
+    
+    
     molecules_blur = gauss_blur.cpu().detach().sum(dim=0)
 
     fig,ax = plt.subplots(3,3,figsize=(15,15))

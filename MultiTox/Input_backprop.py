@@ -1,7 +1,7 @@
 import load_data_multitox as ld
 import dataloaders_sigma as dl
 from Model_train_test_regression import Net, EarlyStopping, train, test
-from visualization import plot_visualization_input_as_parameter
+from visualization import plot_visualization_input_as_parameter, VolToDx
 
 import pandas as pd
 import numpy as np
@@ -11,6 +11,7 @@ from torch.utils import data as td
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import Parameter
+from torch.autograd import Variable
 
 import sys 
 import os
@@ -56,14 +57,20 @@ parser.add_argument("-n", "--num_exp",
                     dest="NUM_EXP", default='',
                     help="number of current experiment")
 parser.add_argument("-r", "--learn_rate",
-                    dest="LEARN_RATE", default=1e-3,
+                    dest="LEARN_RATE", default=1e3,
                     help="learning rate for optimizer",type=float)
 parser.add_argument("-o", "--optimizer",
-                    dest="OPTIMIZER", default='Adam',
-                    help="optimizer_choice",type=str)
+                    dest="OPTIMIZER", default='Adam',choices =['Adam', 'SGDL2'],
+                    help="optimizer choice - Adam with weight decay ('Adam') or SGD with L2 regularization ('SGDL2') ",type=str)
 parser.add_argument("-w", "--weight_decay",
-                    dest="OPTIMIZER", default='Adam',
-                    help="optimizer_choice",type=str)
+                    dest="WEIGHT_DECAY", default=1e-1,
+                    help="weight decay for Adam optimizer or lambda for L2 regularization",type=float)
+parser.add_argument("-i", "--init",
+                    dest="INIT", default='noise',choices =['noise', 'molecule'],
+                    help="initial input conditions - 'noise' or molecule from dataset ('molecule') ",type=str)
+parser.add_argument("-t", "--target",
+                    dest="TARGET", default=29,
+                    help="target toxicity: -1 for all zeros, 0<target<29 for one in exact toxicity label, 29 for all ones",type=int)
 
 
 global args
@@ -104,36 +111,27 @@ def main():
     global LOG_PATH_SAVE
     global NUM_CONFS
     print(vars(args))
-    path = os.path.join(LOG_PATH_LOAD,'exp_'+args.NUM_EXP, 'input_backprop')
+    LOG_PATH_LOAD = os.path.join(LOG_PATH_LOAD,'exp_'+args.NUM_EXP)
+    path = os.path.join(LOG_PATH_LOAD, 'input_backprop')
     original_umask = os.umask(0)
-    try:
-        original_umask = os.umask(0)
-        os.mkdir(path, mode = 0o777)
-    except FileExistsError:
-        files = os.listdir(path)
-        for f in files:
-            os.remove(os.path.join(path,f))
-
-    finally:
-        os.umask(original_umask)
-        LOG_PATH_SAVE = path
-
+    os.makedirs(path, mode=0o777, exist_ok=True)
+    os.umask(original_umask)
+    LOG_PATH_SAVE = path
+    path = os.path.join(LOG_PATH_SAVE,'images')
+    original_umask = os.umask(0)
+    os.makedirs(path, mode=0o777, exist_ok=True)
+    os.umask(original_umask)
+    
+    path = os.path.join(LOG_PATH_SAVE,'pymol')
+    original_umask = os.umask(0)
+    os.makedirs(path, mode=0o777, exist_ok=True)
+    os.umask(original_umask)
 
     path = os.path.join(MODEL_PATH_LOAD,'exp_'+args.NUM_EXP)
-    print(path)
-    try:
-        original_umask = os.umask(0)
-        os.mkdir(path, 0o777)
-        print('Dir has been made')
-    except FileExistsError:
-        print('Dir already exists')
-        files = os.listdir(path)
-        for f in files:
-            os.remove(os.path.join(path,f))
-    finally:
-        print('finita')
-        os.umask(original_umask)
-        MODEL_PATH_SAVE = path
+    MODEL_PATH_LOAD = path
+    os.makedirs(path, mode=0o777, exist_ok=True)
+    os.umask(original_umask)
+    MODEL_PATH_SAVE = path
         
     with open(os.path.join(LOG_PATH_LOAD,args.NUM_EXP+'_parameters.json'),'r') as f:
         args_dict = json.load(f)
@@ -159,73 +157,41 @@ def main():
     with open(os.path.join(LOG_PATH_SAVE,args.NUM_EXP+'_logs.txt'),'a') as f_log:
         f_log.write('Start loading dataset...'+'\n')
     # get dataset without duplicates from csv
-    data = pd.read_csv(os.path.join(DATASET_PATH,'database/data', 'MultiTox.csv'))
-    props = list(data)[1:]
-    scaler = MinMaxScaler()
-    data[props]=scaler.fit_transform(data[props])
 
     # create elements dictionary
 #     elements = ld.create_element_dict(data, amount=AMOUNT_OF_ELEM+1)
     elements={'N':0,'C':1,'Cl':2,'I':3,'Br':4,'F':5,'O':6,'P':7,'S':8}
-    
-    # read databases to dictionary
-    conf_calc = ld.reading_sql_database(database_dir='./database/data/')
-#     with open(os.path.join(DATASET_PATH,'many_elems.json'), 'r') as fp:
-#         conf_calc = json.load(fp)
-    
-    keys=list(conf_calc.keys())
-    print ('Initial dataset size = ', len(keys))
-    with open(os.path.join(LOG_PATH_SAVE,args.NUM_EXP+'_logs.txt'),'a') as f_log:
-        f_log.write('Initial dataset size = '+str(len(keys))+'\n')
-    new_conf_calc={}
-    for smiles in conf_calc.keys():
-        for conf_num in conf_calc[smiles]:
-            if smiles in new_conf_calc.keys():
-                new_conf_calc[smiles][int(conf_num)]=conf_calc[smiles][conf_num]
-            else:
-                new_conf_calc[smiles]={}
-                new_conf_calc[smiles][int(conf_num)]=conf_calc[smiles][conf_num]
+    inv_elems = {v: k for k, v in elements.items()}
 
-    conf_calc=new_conf_calc
-    
-    elems = []
-    for key in keys:
-        conformers=list(conf_calc[key].keys())
-        for conformer in conformers:
-            try:
-                energy = conf_calc[key][conformer]['energy']
-                elems = list(set(elems+list(conf_calc[key][conformer]['coordinates'].keys())))
-            except:
-                del conf_calc[key][conformer]
-        if set(conf_calc[key].keys())!=set(range(100)):
-              del conf_calc[key]
-        elif conf_calc[key]=={}:
-            del conf_calc[key]
 
-    print ('Post-processed dataset size = ', len(list(conf_calc.keys())))
-    with open(os.path.join(LOG_PATH_SAVE,args.NUM_EXP+'_logs.txt'),'a') as f_log:
-        f_log.write('Post-processed dataset size = '+str(len(list(conf_calc.keys())))+'\n')
+    
     # create indexing and label_dict for iteration
-    indexing, label_dict = ld.indexing_label_dict(data, conf_calc)
-    print('Dataset has been loaded, ', int(time.time()-start_time),' s')
-    with open(os.path.join(LOG_PATH_SAVE,args.NUM_EXP+'_logs.txt'),'a') as f_log:
-        f_log.write('Dataset has been loaded, '+str(int(time.time()-start_time))+' s'+'\n')
     
     start_time=time.time()
     # create train and validation sets' indexes
     print('Neural network initialization...')
     with open(os.path.join(LOG_PATH_SAVE,args.NUM_EXP+'_logs.txt'),'a') as f_log:
-        f_log.write('Neural network initialization...'+'\n')
-    train_indexes, test_indexes, _, _ = train_test_split(np.arange(0, len(conf_calc.keys())),
-                                                         np.arange(0, len(conf_calc.keys())), test_size=0.2,
-                                                         random_state=115)
-    train_set = dl.Cube_dataset(conf_calc, label_dict, elements, indexing, train_indexes, dim = args_dict["VOXEL_DIM"])
-    train_generator = td.DataLoader(train_set, batch_size=args_dict["BATCH_SIZE"], shuffle=True)
-
-    test_set = dl.Cube_dataset(conf_calc, label_dict, elements, indexing, test_indexes, dim = args_dict["VOXEL_DIM"])
-    test_generator = td.DataLoader(test_set, batch_size=args_dict["BATCH_SIZE"], shuffle=True)
+        f_log.write('Neural network initialization...'+'\n') 
+    if args.INIT == 'noise':
+        molecule = Variable(torch.randn(1,9,50,50,50).to(device),requires_grad=True)
+    elif args.INIT == 'molecule':
+        pass
+    model = Net(dim=args_dict['VOXEL_DIM'], num_elems=AMOUNT_OF_ELEM, num_targets=TARGET_NUM, elements=elements, transformation=args_dict['TRANSF'],device=device,sigma_0 = args_dict['SIGMA'],sigma_trainable = args_dict['SIGMA_TRAIN'], x_trainable=True, x_input=torch.randn(1,9,50,50,50))
+    model=model.to(device)
+    model.load_state_dict(torch.load(os.path.join(MODEL_PATH_LOAD,'checkpoint.pt')))
+    model.x_input=Parameter(molecule,requires_grad=True)
     
-    model = Net(dim=args_dict["VOXEL_DIM"], num_elems=AMOUNT_OF_ELEM, num_targets=TARGET_NUM, elements=elements, transformation=args_dict["TRANSF"],device=device,sigma_0 = args_dict["SIGMA"],sigma_trainable = args_dict["SIGMA_TRAIN"])
+    if args.TARGET == -1:
+        target = torch.zeros(29)
+    elif args.TARGET == 29:
+        target = torch.ones(1,29)
+    elif args.TARGET>=0 and args.TARGET<29:
+        target = torch.tensor(1.0)
+#     target=torch.tensor(1.0)
+    
+    target = target.to(device)
+
+    
     
     with open(os.path.join(LOG_PATH_SAVE,args.NUM_EXP+'_parameters.json'),'w') as f:
         json.dump(vars(args), f)
@@ -243,7 +209,11 @@ def main():
     for name, param in model.named_parameters():
         print(name, type(param.data), param.size())
     # set optimizer
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.LEARN_RATE)
+    if args.OPTIMIZER == 'Adam':
+        optimizer = torch.optim.Adam([model.x_input], lr=args.LEARN_RATE, weight_decay=args.WEIGHT_DECAY)
+    elif args.OPTIMIZER == 'SGDL2':
+        optimizer = torch.optim.SGD([model.x_input], lr=args.LEARN_RATE)
+    
 
     print('Neural network has been initialized, ', int(time.time()-start_time),' s')
     with open(os.path.join(LOG_PATH_SAVE,args.NUM_EXP+'_logs.txt'),'a') as f_log:
@@ -252,31 +222,36 @@ def main():
     
     
     f_train_loss=open(os.path.join(LOG_PATH_SAVE,args.NUM_EXP+'_log_train_loss.txt'),'w')
-    f_train_loss_ch=open(os.path.join(LOG_PATH_SAVE,args.NUM_EXP+'_log_train_loss_channels.txt'),'w')
-    f_test_loss=open(os.path.join(LOG_PATH_SAVE,args.NUM_EXP+'_log_test_loss.txt'),'w')
     
-    early_stopping = EarlyStopping(patience=args.PATIENCE, verbose=True,model_path=MODEL_PATH)
-
     start_time=time.time()
     # train procedure
-    for epoch in range(1, args.EPOCHS_NUM + 1):
-        with open(os.path.join(LOG_PATH_SAVE,args.NUM_EXP+'_logs.txt'),'a') as f_log:
-            f_log.write('Epoch , '+str(epoch)+'\n')
-        try:
-            train(model, optimizer, train_generator, epoch,device,writer=writer,f_loss=f_train_loss,f_loss_ch=f_train_loss_ch, elements=elements,batch_size = args.BATCH_SIZE,MODEL_PATH=MODEL_PATH)
-            test_loss = test(model, test_generator,epoch, device,writer=writer,f_loss=f_test_loss, elements=elements,batch_size = args.BATCH_SIZE)
-            early_stopping(test_loss, model)
-
-            if early_stopping.early_stop:
-                print(epoch,"Early stopping")
-                break
-            if epoch%10==0:
-                torch.save(model.state_dict(), os.path.join(MODEL_PATH, args.NUM_EXP+'_model_'+str(epoch)))
-        except KeyError:
-            print(epoch,'Key Error problem')
+    for epoch in range(args.EPOCHS_NUM):
+        output = model(model.x_input)
+        criterion=nn.MSELoss()
+        if args.TARGET>=0 and args.TARGET<29:
+            loss = criterion(output[args.TARGET], target)
+        else:
+            loss = criterion(output, target)
+        model.zero_grad()
+        loss.backward()
+        writer.add_scalar('Loss/', loss.cpu().detach().numpy().item(), epoch)
+        optimizer.step()
+        if epoch%5==0:
+            fig, ax = plot_visualization_input_as_parameter(model,elements,grad_step=10**3,name=str(epoch))
+            fig.savefig(os.path.join(LOG_PATH_SAVE,'images','img_'+str(epoch))+'.png',dpi=150,format='png')
+            
+            for element in elements:
+                s = VolToDx()(**{'volume':model.x_input.cpu().detach()[0,elements[element],:,:,:].squeeze().numpy(),'origin':np.array([-17.5,-17.5,-17.5]),'dsteps':np.array([0.5,0.5,0.5])})
+                with open(os.path.join(LOG_PATH_SAVE,'pymol',element+'_pymol_'+str(epoch)+'.dx'),'w') as f:
+                    f.write(s)
+            s = VolToDx()(**{'volume':model.x_input.cpu().detach()[0,:,:,:,:].squeeze().numpy().sum(axis=0),'origin':np.array([-17.5,-17.5,-17.5]),'dsteps':np.array([0.5,0.5,0.5])})
+            with open(os.path.join(LOG_PATH_SAVE,'pymol','pymol_'+str(epoch)+'.dx'),'w') as f:
+                f.write(s)
+        if epoch %100==0 and epoch>5000:
+            torch.save(model.state_dict(),os.path.join(MODEL_PATH_SAVE,'model_'+str(epoch)+'.pt'))
         
-    model.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint.pt')))
-    torch.save(model.state_dict(), os.path.join(MODEL_PATH, args.NUM_EXP+'_model'+str(epoch)+'_fin'))
+    model.load_state_dict(torch.load(os.path.join(MODEL_PATH_SAVE,'checkpoint.pt')))
+    torch.save(model.state_dict(), os.path.join(MODEL_PATH_SAVE, args.NUM_EXP+'_model'+str(epoch)+'_fin'))
     f_train_loss.close()
     f_test_loss.close()
     writer.close()

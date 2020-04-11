@@ -11,6 +11,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import Parameter
 
+
 import sys 
 import os
 import glob
@@ -174,7 +175,7 @@ def main():
     elements={'N':0,'C':1,'Cl':2,'I':3,'Br':4,'F':5,'O':6,'P':7,'S':8}
     
     # read databases to dictionary
-    conf_calc = ld.reading_sql_database(database_dir='./database/data/')
+    conf_calc = ld.reading_sql_database(database_dir='/gpfs/gpfs0/a.alenicheva/MultiTox')
 #     with open(os.path.join(DATASET_PATH,'many_elems.json'), 'r') as fp:
 #         conf_calc = json.load(fp)
     
