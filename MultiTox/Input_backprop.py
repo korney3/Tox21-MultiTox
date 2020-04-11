@@ -225,6 +225,7 @@ def main():
     
     start_time=time.time()
     # train procedure
+    losses = []
     for epoch in range(args.EPOCHS_NUM):
         output = model(model.x_input)
         criterion=nn.MSELoss()
@@ -236,10 +237,10 @@ def main():
         loss.backward()
         writer.add_scalar('Loss/', loss.cpu().detach().numpy().item(), epoch)
         optimizer.step()
+        
         if epoch%5==0:
-            fig, ax = plot_visualization_input_as_parameter(model,elements,grad_step=10**3,name=str(epoch))
-            fig.savefig(os.path.join(LOG_PATH_SAVE,'images','img_'+str(epoch))+'.png',dpi=150,format='png')
-            
+            losses.append(loss.cpu().detach().numpy().item())
+            plot_visualization_input_as_parameter(model,elements,losses, epoch)
             for element in elements:
                 s = VolToDx()(**{'volume':model.x_input.cpu().detach()[0,elements[element],:,:,:].squeeze().numpy(),'origin':np.array([-17.5,-17.5,-17.5]),'dsteps':np.array([0.5,0.5,0.5])})
                 with open(os.path.join(LOG_PATH_SAVE,'pymol',element+'_pymol_'+str(epoch)+'.dx'),'w') as f:
@@ -253,8 +254,7 @@ def main():
     model.load_state_dict(torch.load(os.path.join(MODEL_PATH_SAVE,'checkpoint.pt')))
     torch.save(model.state_dict(), os.path.join(MODEL_PATH_SAVE, args.NUM_EXP+'_model'+str(epoch)+'_fin'))
     f_train_loss.close()
-    f_test_loss.close()
     writer.close()
-    print('Training has finished in ',round((time.time()-start_time)/60,3),' min.')
+#     print('Training has finished in ',round((time.time()-start_time)/60,3),' min.')
 if __name__ == '__main__':
     sys.exit(main()) 

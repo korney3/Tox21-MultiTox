@@ -82,54 +82,27 @@ def molecule_visualization2D(minibatch2D):
         plt.colorbar()
         plt.show()
         
-def plot_visualization_input_as_parameter(model,elements,grad_step=10**3,name=''):
+def plot_visualization_input_as_parameter(model,elements,losses, epoch):
     import matplotlib.pyplot as plt
-    inv_elems = {v: k for k, v in elements.items()}
-    print(name)
-
-    fig,ax = plt.subplots(1,3,figsize=(15,5))
-    
+    inv_elems = {v: k for k, v in elements.items()}    
     data=model.x_input
-    
-    ax[0].imshow(data.cpu().detach().sum(dim=0).sum(dim=0).sum(dim=0))
-    ax[0].set_title('Molecule projection')
-    ax[1].imshow((data-grad_step*data.grad).cpu().detach().sum(dim=0).sum(dim=0).sum(dim=0))
-    ax[1].set_title('Molecule Gradient descent')
-    with torch.no_grad():
-        gauss_blur = model.blur(data)
-
-    ax[2].imshow(gauss_blur.cpu().detach().sum(dim=0).sum(dim=0).sum(dim=0))
-    ax[2].set_title('Blurred molecule')
-    plt.show()
-    
     molecules = data.cpu().detach().sum(dim=0)
-
-    fig,ax = plt.subplots(3,3,figsize=(15,15))
+    fig = plt.figure(figsize=(10,15),constrained_layout=True)
+    gs = fig.add_gridspec(4, 3)
     for i,grad in enumerate(molecules):
-        ax[i//3,i%3].imshow(grad.sum(dim=0))
-        ax[i//3,i%3].set_title(inv_elems[i])
-    fig.suptitle('Atom types in molecule')
+        f_ax = fig.add_subplot(gs[i//3,i%3])
+        f_ax.imshow(grad.sum(dim=0))
+        f_ax.set_title(inv_elems[i],fontsize=25)
+    f_ax = fig.add_subplot(gs[-1, :])
+    f_ax.plot(5*np.arange(0,len(losses),1),losses)
+    f_ax.set_title('Loss function',fontsize=25)
+    f_ax.set_xlabel('epochs',fontsize=25)
+    f_ax.set_ylabel('loss',fontsize=25)
+    fig.suptitle('Atom types in molecule',fontsize=25)
+    
     plt.show()
+    fig.savefig(os.path.join(LOG_PATH_SAVE,'images','img_'+str(epoch))+'.png',dpi=150,format='png')
+    _ = plt.clf()
     
-    return fig, ax
-    
-    
-    molecules_blur = gauss_blur.cpu().detach().sum(dim=0)
-
-    fig,ax = plt.subplots(3,3,figsize=(15,15))
-    for i,grad in enumerate(molecules_blur):
-        ax[i//3,i%3].imshow(grad.sum(dim=0))
-        ax[i//3,i%3].set_title(inv_elems[i])
-    fig.suptitle('Blurred atom types in molecule')
-    plt.show()
-    
-    grads = data.grad.cpu().detach().sum(dim=0)
-
-    fig,ax = plt.subplots(3,3,figsize=(15,15))
-    for i,grad in enumerate(grads):
-        ax[i//3,i%3].imshow(grad.sum(dim=0))
-        ax[i//3,i%3].set_title(inv_elems[i])
-    fig.suptitle('Grads for atom types in molecule')    
-    plt.show()
     
     
