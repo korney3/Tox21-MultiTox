@@ -20,4 +20,4 @@ Output - "tox21_conformers.db", "Wrong SMILES"
 "tox21_conformers.db" can be downloaded from 
 https://drive.google.com/drive/folders/1DmUrLd-ew3P_aLzL6hjonV-LW8mI4Zvq?usp=sharing to this folder
 
-MultiTox0.db creation: 5 processes (1 master, 4 workers) took ~ 30 hours.
+MultiTox0.db creation: 5 processes (1 master, 4 workers) took ~ 30 hours, MultiTox1 ~ 34 hours
