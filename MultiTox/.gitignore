@@ -6,7 +6,6 @@
 **/models_sigma_right/
 *.db
 *.txt
-*.csv
 *.out
 *.json
 **/.ipynb_checkpoints/
