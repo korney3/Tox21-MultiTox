@@ -106,6 +106,8 @@ def del_duplicates(data,filename="tox21_10k_data_all.sdf"):
         data_grouped=data_grouped.join(grouped_prop,on='smiles_no_salt')
         
     data_grouped=data_grouped.dropna(subset=props,how='all')
+    data_grouped['SMILES'] = data_grouped['smiles_no_salt']
+    data_grouped.drop (columns=['smiles_no_salt'], axis = 1)
     data_grouped.to_csv(name + '_no_salts.csv',index=False)
     return data_grouped
 

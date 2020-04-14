@@ -16,13 +16,16 @@ from argparse import ArgumentParser
 
 parser = ArgumentParser()
 parser.add_argument("-a", "--amount_of_elem", dest="AMOUNT_OF_ELEM",
-                    help="number of atoms to store", default = 10,type=int)
+                    help="number of atoms to store. Default is 10.", default = 10,type=int)
 parser.add_argument("-n", "--num_confs",
                     dest="NUM_CONFS", default=100,
-                    help="number of conformers to store",type=int)
+                    help="number of conformers to store. Default is 100.",type=int)
 parser.add_argument("-f", "--filename",
                     dest="FILENAME", default='./data/MultiTox0',
-                    help="name of file to preprocess",type=str)
+                    help="name of file to preprocess. For MultiTox task variants are './data/MultiTox0', './data/MultiTox1', './data/MultiTox2'; for Tox21 task there is option './data/tox21_10k_data_all_no_salts'. Default is './data/MultiTox0'",type=str)
+parser.add_argument("-d", "--data",
+                    dest="DATA", default='./data/MultiTox.csv',
+                    help="name of file containing whole dataset. For MultiTox task print './data/MultiTox.csv', for Tox21 - ./data/tox21_10k_data_all_no_salts.csv",type=str)
 
 
 global args
@@ -59,7 +62,11 @@ def create_element_dict(data,amount=9,treshold=10, add_H=False):
     norm=0
     for smile in data['SMILES']:
         molecule=Chem.MolFromSmiles(smile)
-        molecule=Chem.AddHs(molecule)
+        try: 
+            molecule=Chem.AddHs(molecule)
+        except:
+            data = data[data['SMILES'] != smile]
+            continue
 
         for i in range(molecule.GetNumAtoms()):
             atom = molecule.GetAtomWithIdx(i)
@@ -80,7 +87,7 @@ def create_element_dict(data,amount=9,treshold=10, add_H=False):
     return elements
 
 #read dataset
-data=pd.read_csv('./data/MultiTox.csv')
+data=pd.read_csv(args.DATA)
 global elements
 elements=create_element_dict(data,amount=AMOUNT_OF_ELEM)
 data=pd.read_csv(args.FILENAME+'.csv')

@@ -11,13 +11,18 @@ Input - data (pandas.DataFrame)
 Output - "tox21_10k_data_all_no_salts.csv"
 
 Run file "sql_database_creating.py" in command line as "mpiexec -n N python sql_database_creating.py", 
-where N - amount of processes (windows).
+where N - amount of processes.
 
-Input - "tox21_10k_data_all_no_salts.csv"
+There are flags which can be applied to the script:
 
-Output - "tox21_conformers.db", "Wrong SMILES"
+"-a", "--amount_of_elem", help="number of atoms to store. Default is 10.", type=int
+"-n", "--num_confs", help="number of conformers to store. Default is 100.", type=int
+"-f", "--filename", help="name of file to preprocess. For MultiTox task variants are './data/MultiTox0', './data/MultiTox1', './data/MultiTox2'; for Tox21 task there is option './data/tox21_10k_data_all_no_salts'. Default is './data/MultiTox0'", type=str
+"-d", "--data", help="name of file containing whole dataset. For MultiTox task print './data/MultiTox.csv', for Tox21 - ./data/tox21_10k_data_all_no_salts.csv. Default is './data/MultiTox.csv'", type=str
 
-"tox21_conformers.db" can be downloaded from 
+Database for Tox21 dataset with 6 types of atoms "tox21_conformers.db" can be downloaded from 
 https://drive.google.com/drive/folders/1DmUrLd-ew3P_aLzL6hjonV-LW8mI4Zvq?usp=sharing to this folder
+
+
 
 MultiTox0.db creation: 5 processes (1 master, 4 workers) took ~ 30 hours, MultiTox1 ~ 34 hours

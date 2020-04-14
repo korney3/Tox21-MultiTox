@@ -12,14 +12,32 @@ from rdkit.Chem import AllChem
 from rdkit.Chem import rdMolTransforms as rdmt
 from func_timeout import FunctionTimedOut,func_set_timeout
 
+from argparse import ArgumentParser
+
+parser = ArgumentParser()
+parser.add_argument("-a", "--amount_of_elem", dest="AMOUNT_OF_ELEM",
+                    help="number of atoms to store. Default is 10.", default = 10,type=int)
+parser.add_argument("-n", "--num_confs",
+                    dest="NUM_CONFS", default=100,
+                    help="number of conformers to store. Default is 100.",type=int)
+parser.add_argument("-f", "--filename",
+                    dest="FILENAME", default='./data/MultiTox0',
+                    help="name of file to preprocess. For MultiTox task variants are './data/MultiTox0', './data/MultiTox1', './data/MultiTox2'; for Tox21 task there is option './data/tox21_10k_data_all_no_salts'. Default is './data/MultiTox0'",type=str)
+parser.add_argument("-d", "--data",
+                    dest="DATA", default='./data/MultiTox.csv',
+                    help="name of file containing whole dataset. For MultiTox task print './data/MultiTox.csv', for Tox21 - ./data/tox21_10k_data_all_no_salts.csv",type=str)
+
+
+global args
+args = parser.parse_args()
 
 #number of conformers created for every molecule
 global NUM_CONFS
-NUM_CONFS=100
+NUM_CONFS=args.NUM_CONFS
 
 #amount of chemical elements taking into account
 global AMOUNT_OF_ELEM
-AMOUNT_OF_ELEM=6
+AMOUNT_OF_ELEM=args.AMOUNT_OF_ELEM
 
 
 def enum(*sequential, **named):
@@ -39,12 +57,16 @@ rank = comm.rank        # rank of this process
 status = MPI.Status()   # get MPI status object
 
 #creating array of elements in each chemical compound to use
-def create_element_dict(data,amount=9,treshold=10):
+def create_element_dict(data,amount=9,treshold=10, add_H=False):
     elements={}
     norm=0
-    for smile in data['smiles_no_salt']:
+    for smile in data['SMILES']:
         molecule=Chem.MolFromSmiles(smile)
-        molecule=Chem.AddHs(molecule)
+        try: 
+            molecule=Chem.AddHs(molecule)
+        except:
+            data = data[data['SMILES'] != smile]
+            continue
 
         for i in range(molecule.GetNumAtoms()):
             atom = molecule.GetAtomWithIdx(i)
@@ -59,24 +81,27 @@ def create_element_dict(data,amount=9,treshold=10):
     from collections import OrderedDict
     dd = OrderedDict(sorted(elements.items(), key=lambda x: x[1]))
     elements=list(dd.keys())[-amount:]  
-    elements=dict((elem,i) for i, elem in enumerate(elements))            
-    return elements      
+    elements=dict((elem,i) for i, elem in enumerate(elements))  
+    if not add_H:
+        del elements['H']
+    return elements
 
 #read dataset
-data=pd.read_csv('tox21_10k_data_all_no_salts.csv')
+data=pd.read_csv(args.DATA)
 global elements
 elements=create_element_dict(data,amount=AMOUNT_OF_ELEM)
+data=pd.read_csv(args.FILENAME+'.csv')
 
 if rank == 0:
     # Master process executes code below
     f=open('Wrong SMILES','w')
-    conn = sqlite3.connect('tox21_conformers.db')
+    conn = sqlite3.connect(args.FILENAME+'.db')
     c = conn.cursor()
     # Create table
     c.execute('DROP table IF EXISTS tox')
     c.execute('''CREATE TABLE tox
                  (smile, conformer,energy,type of atom,x,y,z)''')
-    tasks = data['smiles_no_salt']
+    tasks = data['SMILES']
     task_index = 0
     num_workers = size - 1
     closed_workers = 0
