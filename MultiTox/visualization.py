@@ -4,6 +4,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 
 
 import torch
@@ -82,7 +83,7 @@ def molecule_visualization2D(minibatch2D):
         plt.colorbar()
         plt.show()
         
-def plot_visualization_input_as_parameter(model,elements,losses, epoch):
+def plot_visualization_input_as_parameter(model,elements,losses, LOG_PATH_SAVE, epoch):
     import matplotlib.pyplot as plt
     inv_elems = {v: k for k, v in elements.items()}    
     data=model.x_input

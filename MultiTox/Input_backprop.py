@@ -240,7 +240,7 @@ def main():
         
         if epoch%5==0:
             losses.append(loss.cpu().detach().numpy().item())
-            plot_visualization_input_as_parameter(model,elements,losses, epoch)
+            plot_visualization_input_as_parameter(model,elements,losses,LOG_PATH_SAVE, epoch)
             for element in elements:
                 s = VolToDx()(**{'volume':model.x_input.cpu().detach()[0,elements[element],:,:,:].squeeze().numpy(),'origin':np.array([-17.5,-17.5,-17.5]),'dsteps':np.array([0.5,0.5,0.5])})
                 with open(os.path.join(LOG_PATH_SAVE,'pymol',element+'_pymol_'+str(epoch)+'.dx'),'w') as f:
