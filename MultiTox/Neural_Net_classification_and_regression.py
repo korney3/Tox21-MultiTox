@@ -37,46 +37,54 @@ TARGET_NUM = 29
 
 #dataset folder
 # DATASET_PATH="~/Tox21-MultiTox/MultiTox"
-DATASET_PATH="./"
+DATASET_PATH = "/gpfs/gpfs0/a.alenicheva"
+
+TOX21_STORAGE = "../Tox21_Neural_Net"
+
+MULTITOX_STORAGE = "./"
+
+EXPERIMENTS_DATA = "./"
 
 #logs path
-LOG_PATH=os.path.join(DATASET_PATH,"logs_sigma_right")
+LOG_PATH=os.path.join(EXPERIMENTS_DATA, "logs_sigma_right")
 
 
 #models path
-MODEL_PATH=os.path.join(DATASET_PATH,"models_sigma_right")
+MODEL_PATH=os.path.join(EXPERIMENTS_DATA, "models_sigma_right")
 
 
 from argparse import ArgumentParser
 
 parser = ArgumentParser()
 parser.add_argument("-e", "--epochs", dest="EPOCHS_NUM",
-                    help="number of train epochs",default = 100,type=int)
+                    help="number of train epochs. Default is 100.",default = 100,type=int)
 parser.add_argument("-p", "--patience",
                     dest="PATIENCE", default=25,
-                    help="number of epochs to wait before early stopping",type=int)
+                    help="number of epochs to wait before early stopping. Default is 25.",type=int)
 parser.add_argument("-s", "--sigma",
                     dest="SIGMA", default=1.2,
                     help="sigma parameter",type=float)
 parser.add_argument("-b", "--batch_size",
                     dest="BATCH_SIZE", default=32,
-                    help="size of train and test batches",type=int)
+                    help="size of train and test batches. Default is 32.",type=int)
 parser.add_argument("-t", "--transformation",
                     dest="TRANSF", default='g',choices =['g', 'w'],
-                    help="type of augmentstion - g (gauss) or w (waves)")
+                    help="type of augmentstion - 'g' (gauss) or 'w' (waves). Default is 'g'.")
 parser.add_argument("-n", "--num_exp",
                     dest="NUM_EXP", default='',
                     help="number of current experiment")
 parser.add_argument("-v", "--voxel_dim",
                     dest="VOXEL_DIM", default=50,
-                    help="size of produced voxel cube")
+                    help="size of produced voxel cube. Default is 50.")
 parser.add_argument("-r", "--learn_rate",
                     dest="LEARN_RATE", default=1e-5,
-                    help="learning rate for optimizer",type=float)
+                    help="learning rate for optimizer. Default is 1e-5.",type=float)
 parser.add_argument("-a", "--sigma_train",
                     dest="SIGMA_TRAIN", default=False,
-                    help="Regime of training sigma",type=bool)
-
+                    help="regime of training sigma (True) or not (False). Default is False.",type=bool)
+parser.add_argument("-m", "--mode",
+                    dest="MODE", default='r', choices =['r', 'c'],
+                    help="choosing classification ('c' option) or regression ('r' option) tasks. Default is 'r'",type=bool)
 
 global args
 args = parser.parse_args()
@@ -112,6 +120,16 @@ def main():
     global AMOUNT_OF_ELEM
     global LOG_PATH
     global NUM_CONFS
+    global TOX21_STORAGE
+    global MULTITOX_STORAGE
+    global EXPERIMENTS_DATA
+    global args
+    
+    if args.MODE == "r":
+        TARGET_NUM = 29
+    elif args.MODE == "c":
+        TARGET_NUM = 12
+    
     print(vars(args))
     path = os.path.join(LOG_PATH,'exp_'+args.NUM_EXP)
     original_umask = os.umask(0)
@@ -166,17 +184,24 @@ def main():
     with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
         f_log.write('Start loading dataset...'+'\n')
     # get dataset without duplicates from csv
-    data = pd.read_csv(os.path.join(DATASET_PATH,'database/data', 'MultiTox.csv'))
-    props = list(data)[1:]
+    if args.MODE == 'r':
+        data = pd.read_csv(os.path.join(MULTITOX_STORAGE,'database/data', 'MultiTox.csv'))
+    elif args.MODE == 'c':
+        data = pd.read_csv(os.path.join(TOX21_STORAGE,'database/data', 'tox21_10k_data_all_no_salts.csv'))
+        
+    props = list(data).remove("SMILES")
     scaler = MinMaxScaler()
     data[props]=scaler.fit_transform(data[props])
 
     # create elements dictionary
 #     elements = ld.create_element_dict(data, amount=AMOUNT_OF_ELEM+1)
-    elements={'N':0,'C':1,'Cl':2,'I':3,'Br':4,'F':5,'O':6,'P':7,'S':8}
+    elements={"N":0,"C":1,"Cl":2,"I":3,"Br":4,"F":5,"O":6,"P":7,"S":8}
     
     # read databases to dictionary
-    conf_calc = ld.reading_sql_database(database_dir='/gpfs/gpfs0/a.alenicheva/MultiTox')
+    if args.MODE == "r":
+        conf_calc = ld.reading_sql_database(database_dir=os.path.join(DATASET_PATH,"MultiTox"))
+    elif args.MODE == "c":
+        conf_calc = ld.reading_sql_database(database_dir=os.path.join(DATASET_PATH,"Tox21"))
 #     with open(os.path.join(DATASET_PATH,'many_elems.json'), 'r') as fp:
 #         conf_calc = json.load(fp)
     

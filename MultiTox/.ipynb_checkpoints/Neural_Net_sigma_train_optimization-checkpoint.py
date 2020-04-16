@@ -77,6 +77,7 @@ parser.add_argument("-a", "--sigma_train",
                     dest="SIGMA_TRAIN", default=False,
                     help="Regime of training sigma",type=bool)
 
+
 global args
 args = parser.parse_args()
 
