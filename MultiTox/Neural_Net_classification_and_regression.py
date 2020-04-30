@@ -1,6 +1,6 @@
 import load_data_multitox as ld
 import dataloaders_sigma as dl
-from Model_train_test_regression import Net, EarlyStopping, train_regression, train_classification, test_regression#, test_classififcation
+from Model_train_test_regression import Net, EarlyStopping, train_regression, train_classification, test_regression, test_classification
 
 import pandas as pd
 import numpy as np
@@ -93,6 +93,9 @@ parser.add_argument("-m", "--mode",
 parser.add_argument("-c", "--continue",
                     dest="CONTINUE", default=1,
                     help="number of epoch to continue training process from. Default is 1",type=int)
+parser.add_argument("-l", "--trlearning",
+                    dest="TRLEARNING", default=0, choices =[0, 1],
+                    help="regime of transferlearning for classification task, 0 - transfer learning off, 1 - on. Default is 0",type=int)
 
 global args
 args = parser.parse_args()
@@ -274,10 +277,56 @@ def main():
     test_set = dl.Cube_dataset(conf_calc, label_dict, elements, indexing, test_indexes, dim = args.VOXEL_DIM)
     test_generator = td.DataLoader(test_set, batch_size=args.BATCH_SIZE, shuffle=True)
     
-    model = Net(dim=args.VOXEL_DIM, num_elems=AMOUNT_OF_ELEM, num_targets=TARGET_NUM, elements=elements, transformation=args.TRANSF,device=device,sigma_0 = args.SIGMA,sigma_trainable = args.SIGMA_TRAIN, mode = args.MODE)
+    if args.TRLEARNING:
+        model = Net(dim=args.VOXEL_DIM, num_elems=AMOUNT_OF_ELEM, num_targets=29, elements=elements, transformation=args.TRANSF,device=device,sigma_0 = args.SIGMA,sigma_trainable = args.SIGMA_TRAIN, mode = args.MODE)
+    else:
+        model = Net(dim=args.VOXEL_DIM, num_elems=AMOUNT_OF_ELEM, num_targets=TARGET_NUM, elements=elements, transformation=args.TRANSF,device=device,sigma_0 = args.SIGMA,sigma_trainable = args.SIGMA_TRAIN, mode = args.MODE)
     
     with open(os.path.join(LOG_PATH,args.NUM_EXP+'_parameters.json'),'w') as f:
         json.dump(vars(args), f)
+        
+    if args.CONTINUE>1:
+        model_checkpoints = os.listdir(MODEL_PATH)
+        if 'checkpoint_es.pt' in model_checkpoints:
+            model.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint_es.pt')))
+#             if torch.cuda.device_count() > 1:
+#                 model.module.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint_es.pt')))
+#             else:
+#                 model.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint_es.pt')))
+        elif 'checkpoint.pt' in model_checkpoints:
+            model.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint.pt')))
+#             if torch.cuda.device_count() > 1:
+#                 model.module.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint.pt')))
+#             else:
+#                 model.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint.pt')))
+    for name, param in model.named_parameters():
+        print(name, type(param.data), param.size())
+    if args.TRLEARNING:
+        model_checkpoints = os.listdir(MODEL_PATH)
+        if 'checkpoint_es.pt' in model_checkpoints:
+            model.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint_es.pt')))
+#             if torch.cuda.device_count() > 1:
+#                 model.module.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint_es.pt')))
+#             else:
+#                 model.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint_es.pt')))
+        elif 'checkpoint.pt' in model_checkpoints:
+            model.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint.pt')))
+#             if torch.cuda.device_count() > 1:
+#                 model.module.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint.pt')))
+#             else:
+#                 model.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint.pt')))
+        for param in model.parameters():
+            param.requires_grad = False
+        model.fc1 = nn.Linear(256, 128)
+        model.fc2 = nn.Linear(128,TARGET_NUM)
+        total_params = sum(p.numel() for p in model.parameters())
+        print(f'{total_params:,} total parameters.')
+        total_trainable_params = sum(
+            p.numel() for p in model.parameters() if p.requires_grad)
+        print(f'{total_trainable_params:,} training parameters.')
+        with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+            f_log.write('total parameters: '+str(total_params)+'\n')
+            f_log.write('training parameters: '+str(total_trainable_params)+'\n')
     
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
@@ -289,12 +338,46 @@ def main():
 
     model=model.to(device)
     
-    if args.CONTINUE>1:
-        model_checkpoints = os.listdir(MODEL_PATH)
-        if 'checkpoint_es.pt' in model_checkpoints:
-            model.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint_es.pt')))
-        elif 'checkpoint.pt' in model_checkpoints:
-            model.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint.pt')))
+#     if args.CONTINUE>1:
+#         model_checkpoints = os.listdir(MODEL_PATH)
+#         if 'checkpoint_es.pt' in model_checkpoints:
+#             model.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint_es.pt')))
+# #             if torch.cuda.device_count() > 1:
+# #                 model.module.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint_es.pt')))
+# #             else:
+# #                 model.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint_es.pt')))
+#         elif 'checkpoint.pt' in model_checkpoints:
+#             model.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint.pt')))
+# #             if torch.cuda.device_count() > 1:
+# #                 model.module.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint.pt')))
+# #             else:
+# #                 model.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint.pt')))
+                
+#     if args.TRLEARNING:
+#         model_checkpoints = os.listdir(MODEL_PATH)
+#         if 'checkpoint_es.pt' in model_checkpoints:
+#             if torch.cuda.device_count() > 1:
+#                 model.module.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint_es.pt')))
+#             else:
+#                 model.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint_es.pt')))
+#         elif 'checkpoint.pt' in model_checkpoints:
+#             if torch.cuda.device_count() > 1:
+#                 model.module.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint.pt')))
+#             else:
+#                 model.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint.pt')))
+#         for param in model.parameters():
+#             param.requires_grad = False
+#         model.module.fc1 = nn.Linear(256, 128)
+#         model.module.fc2 = nn.Linear(128,TARGET_NUM)
+#         total_params = sum(p.numel() for p in model.parameters())
+#         print(f'{total_params:,} total parameters.')
+#         total_trainable_params = sum(
+#             p.numel() for p in model.parameters() if p.requires_grad)
+#         print(f'{total_trainable_params:,} training parameters.')
+#         with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+#             f_log.write('total parameters: '+str(total_params)+'\n')
+#             f_log.write('training parameters: '+str(total_trainable_params)+'\n')
+
 
 
     for name, param in model.named_parameters():

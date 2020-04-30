@@ -100,7 +100,7 @@ class Net(nn.Module):
             self.register_buffer('x_input',torch.zeros(1, num_elems, dim, dim, dim).float().to(device))
         
 
-
+        print(self.num_targets)
 
         # initialize dimensions
         self.dim = dim
@@ -127,7 +127,7 @@ class Net(nn.Module):
 #         self.fc2 = nn.Linear(1024, num_targets)
         
         self.fc1 = nn.Linear(256, 128)
-        self.fc2 = nn.Linear(128, num_targets)
+        self.fc2 = nn.Linear(128, self.num_targets)
 
         # initialize dense layer's weights
         nn.init.xavier_uniform_(self.fc1.weight)
@@ -591,7 +591,7 @@ def test_regression(model, test_generator,epoch,device,batch_size,num_targets=29
             writer.add_scalar('Test/Loss/'+str(i), loss, epoch)
     return test_loss
 
-def test_classification(model, test_generator,epoch,device,batch_size,num_targets=29,writer=None,f_loss=None, elements=None):
+def test_classification(model, test_generator,epoch,device,batch_size,num_targets=29,writer=None,f_loss=None, elements=None, PENALTY = None):
     """ Validation of trained model
 
         Parameters
