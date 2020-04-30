@@ -85,6 +85,9 @@ parser.add_argument("-a", "--sigma_train",
 parser.add_argument("-m", "--mode",
                     dest="MODE", default='r', choices =['r', 'c'],
                     help="choosing classification ('c' option) or regression ('r' option) tasks. Default is 'r'",type=bool)
+parser.add_argument("-c", "--continue",
+                    dest="CONTINUE", default=1,
+                    help="number of epoch to continue training process from. Default is 1",type=int)
 
 global args
 args = parser.parse_args()
@@ -132,35 +135,39 @@ def main():
     
     print(vars(args))
     path = os.path.join(LOG_PATH,'exp_'+args.NUM_EXP)
-    original_umask = os.umask(0)
-    try:
-        original_umask = os.umask(0)
-        os.mkdir(path, mode = 0o777)
-    except FileExistsError:
-        files = os.listdir(path)
-        for f in files:
-            os.remove(os.path.join(path,f))
+    os.mkdirs(path, exist_ok=True)
+#     original_umask = os.umask(0)
+    LOG_PATH = path
+#     try:
+#         original_umask = os.umask(0)
+#         os.mkdir(path, mode = 0o777)
+#     except FileExistsError:
+#         files = os.listdir(path)
+#         for f in files:
+#             os.remove(os.path.join(path,f))
 
-    finally:
-        os.umask(original_umask)
-        LOG_PATH = path
+#     finally:
+#         os.umask(original_umask)
+#         LOG_PATH = path
 
 
     path = os.path.join(MODEL_PATH,'exp_'+args.NUM_EXP)
-    print(path)
-    try:
-        original_umask = os.umask(0)
-        os.mkdir(path, 0o777)
-        print('Dir has been made')
-    except FileExistsError:
-        print('Dir already exists')
-        files = os.listdir(path)
-        for f in files:
-            os.remove(os.path.join(path,f))
-    finally:
-        print('finita')
-        os.umask(original_umask)
-        MODEL_PATH = path
+    os.mkdirs(path, exist_ok=True)
+#     original_umask = os.umask(0)
+    MODEL_PATH = path
+#     try:
+#         original_umask = os.umask(0)
+#         os.mkdir(path, 0o777)
+#         print('Dir has been made')
+#     except FileExistsError:
+#         print('Dir already exists')
+#         files = os.listdir(path)
+#         for f in files:
+#             os.remove(os.path.join(path,f))
+#     finally:
+#         print('finita')
+#         os.umask(original_umask)
+#         MODEL_PATH = path
         
     f_log=open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'w')
     f_log.close()
@@ -271,6 +278,10 @@ def main():
     # Construct our model by instantiating the class defined above
 
     model=model.to(device)
+     
+    model.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint.pt')))
+
+        
 
     for name, param in model.named_parameters():
         print(name, type(param.data), param.size())
@@ -291,7 +302,7 @@ def main():
 
     start_time=time.time()
     # train procedure
-    for epoch in range(1, args.EPOCHS_NUM + 1):
+    for epoch in range(args.CONTINUE, args.EPOCHS_NUM + args.CONTINUE):
         with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
             f_log.write('Epoch , '+str(epoch)+'\n')
         try:

@@ -1,6 +1,6 @@
 import load_data_multitox as ld
 import dataloaders_sigma as dl
-from Model_train_test_regression import Net, EarlyStopping, train, test
+from Model_train_test_regression_backup import Net, EarlyStopping, train, test
 
 import pandas as pd
 import numpy as np
