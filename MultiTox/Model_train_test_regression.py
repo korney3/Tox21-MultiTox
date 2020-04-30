@@ -46,7 +46,7 @@ class Net(nn.Module):
         Apply neural network to batch of molecules
     """
     def __init__(self, dim=70, kernel_size=51,
-                 num_elems=6, 
+                 num_elems=9, 
                  num_targets=29, 
                  transformation='g', 
                  dx=0.5,
@@ -55,6 +55,7 @@ class Net(nn.Module):
                  sigma_trainable = False,
                  sigma_0=3, 
                  x_trainable = False,
+                 mode = 'r',
                  x_input=None):
         """
         Initialize neural network.
@@ -111,6 +112,7 @@ class Net(nn.Module):
         self.transform=transformation
         self.device=device
         self.elements=elements
+        self.mode = mode
 
         # create layers
         self.conv1 = nn.Conv3d(num_elems, 32, kernel_size=(3, 3, 3))
@@ -231,8 +233,10 @@ class Net(nn.Module):
         x_vect = x_conv.view(x.shape[0], -1)
         y1 = F.relu(self.fc1(x_vect))
         y2=self.fc2(y1)
-
-        return y2
+        if self.mode == 'r':
+            return y2
+        else:
+            return torch.sigmoid(y2)
     
 class EarlyStopping:
     """Early stops the training if validation loss doesn't improve after a given patience."""
@@ -280,9 +284,9 @@ class EarlyStopping:
         else:
             torch.save(model.state_dict(), os.path.join(self.model_path,'checkpoint_es.pt'))
         self.val_loss_min = val_loss
-    
-def train(model, optimizer, train_generator, epoch, device, batch_size, num_targets=29, mode = 'r', PENALTY = None, writer = None,f_loss=None,f_loss_ch = None, elements=None, MODEL_PATH=None, LOGS_FILEPATH=None):
-    """ Train model and write logs to tensorboard and .txt files
+        
+def train_regression (model, optimizer, train_generator, epoch, device, batch_size, num_targets=29, writer = None, f_loss=None,f_loss_ch = None, elements=None, MODEL_PATH=None, LOGS_FILEPATH=None):
+    """ Train regression model and write logs to tensorboard and .txt files
 
         Parameters
         ----------
@@ -296,6 +300,10 @@ def train(model, optimizer, train_generator, epoch, device, batch_size, num_targ
             number of trained epoch
         device
             torch.device
+        batch_size
+            size of batch
+        num_targets
+            number of labels in regression task
         writer
             tensorboardX.SummaryWriter
         f_loss
@@ -304,6 +312,11 @@ def train(model, optimizer, train_generator, epoch, device, batch_size, num_targ
             .txt file for loss per target saving
         elements
             dictionary with {atom name : number} mapping
+        MODEL_PATH
+            path to save model
+        LOGS_FILEPATH
+            file with logs errors
+        
 
         Returns
         -------
@@ -312,15 +325,8 @@ def train(model, optimizer, train_generator, epoch, device, batch_size, num_targ
     elems=dict([(elements[element], element) for element in elements.keys()])
     model.train()
     train_loss=0
-    
     losses=np.zeros(num_targets)
     num_losses=np.zeros(num_targets)
-    
-    if mode == 'c':
-        aucs=np.zeros(num_targets)
-        num_aucs=np.zeros(num_targets)
-#         b_accs=np.zeros(num_targets)
-#         num_b_accs=np.zeros(num_targets)
     for batch_idx, (data, target) in enumerate(train_generator):
         data = data.to(device)
         target = target.to(device)
@@ -333,24 +339,17 @@ def train(model, optimizer, train_generator, epoch, device, batch_size, num_targ
 
         i=0
         for one_target,one_output in zip(target.cpu().t(),output.cpu().t()):
-            with torch.no_grad(): 
+            with torch.no_grad():
+                
                 mask = (one_target == one_target)
                 output_masked = torch.masked_select(one_output, mask).type_as(one_output)
                 target_masked = torch.masked_select(one_target, mask).type_as(one_output)
-                if mode == "r":
-                    criterion=nn.MSELoss()
-                    loss = criterion(output_masked.cpu(),target_masked.cpu())
-                    if loss == loss:
-                        losses[i]+=loss
-                        num_losses[i]+=1
-                elif mode == "c":
-                    pred = output_masked.ge(0.5).type_as(one_output)
-                     try:
-                        auc=roc_auc_score(target_masked.cpu().detach(),pred.cpu().detach())
-                        aucs[i]+=auc
-                        num_aucs[i]+=1
-                    except ValueError:
-                        pass
+                criterion=nn.MSELoss()
+                loss = criterion(output_masked.cpu(),target_masked.cpu())
+                if loss == loss:
+                    losses[i]+=loss
+                    num_losses[i]+=1
+
             i+=1
         # calculate output vector
         
@@ -358,13 +357,8 @@ def train(model, optimizer, train_generator, epoch, device, batch_size, num_targ
         mask = (target == target)
         output_masked = torch.masked_select(output, mask).type_as(output)
         target_masked = torch.masked_select(target, mask).type_as(output)
-        if mode == 'c':
-            penalty_masked = torch.masked_select(PENALTY.to(device), mask).type_as(output)
-            class_weights=(1-penalty_masked)*(target_masked).to(device)+penalty_masked
-            loss = F.binary_cross_entropy(output_masked, target_masked,weight=class_weights)
-        elif mode == 'r':
-            criterion=nn.MSELoss()
-            loss = criterion(output_masked, target_masked)
+        criterion=nn.MSELoss()
+        loss = criterion(output_masked, target_masked)
         if LOGS_FILEPATH is not None:
             with open(LOGS_FILEPATH,'a') as f_log:
                 f_log.write('loss , '+str(loss.cpu().detach().numpy().item())+'\n')
@@ -402,18 +396,131 @@ def train(model, optimizer, train_generator, epoch, device, batch_size, num_targ
         if f_loss_ch is not None and loss==loss:
             f_loss_ch.write(str(epoch)+'\t'+str(batch_idx)+'\t'+str(i)+'\t'+str(loss)+'\n')
             writer.add_scalar('Train/Loss/'+str(i), loss, epoch)
-    if mode == 'c':
-        aucs/=num_aucs    
-        for i,loss in enumerate(losses):
-            if f_loss_ch is not None and loss==loss:
-                f_loss_ch.write(str(epoch)+'\t'+str(batch_idx)+'\t'+str(i)+'\t'+str(loss)+'\n')
-                writer.add_scalar('Train/Loss/'+str(i), loss, epoch)
+    return
+    
+def train_classification(model, optimizer, train_generator, epoch, device, batch_size, num_targets=12, PENALTY = None, writer = None,f_loss=None,f_loss_ch = None, elements=None, MODEL_PATH=None, LOGS_FILEPATH=None):
+    """ Train model and write logs to tensorboard and .txt files
+
+        Parameters
+        ----------
+        model
+            torch.nn.Module object to train
+        optimizer
+            torch.optim object
+        train_generator
+            torch.utils.data.DataLoader object, contain iterable set of torch.Tensor data (num_elems, dim,dim,dim) and torch.Tensor labels (num_targets, )
+        epoch
+            number of trained epoch
+        device
+            torch.device
+        batch_size
+            size of batch
+        num_targets
+            number of labels in the task
+        PENALTY
+            vector of penalties for each label 
+        writer
+            tensorboardX.SummaryWriter
+        f_loss
+            .txt file for train loss saving
+        f_loss_ch
+            .txt file for aucs per target saving
+        elements
+            dictionary with {atom name : number} mapping
+
+        Returns
+        -------
+        None
+        """
+    elems=dict([(elements[element], element) for element in elements.keys()])
+    model.train()
+    train_loss=0
+    
+    losses=np.zeros(num_targets)
+    num_losses=np.zeros(num_targets)
+    
+    aucs=np.zeros(num_targets)
+    num_aucs=np.zeros(num_targets)
+#         b_accs=np.zeros(num_targets)
+#         num_b_accs=np.zeros(num_targets)
+    for batch_idx, (data, target) in enumerate(train_generator):
+        data = data.to(device)
+        target = target.to(device)
+        if LOGS_FILEPATH is not None:
+            with open(LOGS_FILEPATH,'a') as f_log:
+                f_log.write('Batch , '+str(batch_idx)+'\n')
+        # set gradients to zero
+        optimizer.zero_grad()
+        output = model(data)
+
+        i=0
+        for one_target,one_output in zip(target.cpu().t(),output.cpu().t()):
+            with torch.no_grad(): 
+                mask = (one_target == one_target)
+                output_masked = torch.masked_select(one_output, mask).type_as(one_output)
+                target_masked = torch.masked_select(one_target, mask).type_as(one_output)
+                pred = output_masked.ge(0.5).type_as(one_output)
+                try:
+                    auc=roc_auc_score(target_masked.cpu().detach(),pred.cpu().detach())
+                    aucs[i]+=auc
+                    num_aucs[i]+=1
+                except ValueError:
+                    pass
+            i+=1
+        # calculate output vector
+        
+        # create mask to get rid of Nan's in target
+        mask = (target == target)
+        output_masked = torch.masked_select(output, mask).type_as(output)
+        target_masked = torch.masked_select(target, mask).type_as(output)
+        penalty_masked = torch.masked_select(PENALTY.to(device), mask).type_as(output)
+        class_weights=(1-penalty_masked)*(target_masked).to(device)+penalty_masked
+        loss = F.binary_cross_entropy(output_masked, target_masked,weight=class_weights)
+        if LOGS_FILEPATH is not None:
+            with open(LOGS_FILEPATH,'a') as f_log:
+                f_log.write('loss , '+str(loss.cpu().detach().numpy().item())+'\n')
+        if f_loss is not None:
+            f_loss.write(str(epoch)+'\t'+str(batch_idx)+'\t'+str(loss.cpu().detach().numpy().item())+'\n')
+        loss.backward()
+        optimizer.step()
+        train_loss+=loss.cpu().detach().numpy().item()
+        if LOGS_FILEPATH is not None:
+            with open(LOGS_FILEPATH,'a') as f_log:
+                f_log.write('backward done '+'\n')
+        if batch_idx % 100 == 0:
+            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                epoch, batch_idx * len(data), len(train_generator.dataset),
+                       100. * batch_idx / len(train_generator), loss.item()))
+            if MODEL_PATH is not None:
+                if torch.cuda.device_count() > 1:
+                    torch.save(model.module.state_dict(), os.path.join(MODEL_PATH,'checkpoint.pt'))
+                else:
+                    torch.save(model.state_dict(), os.path.join(MODEL_PATH,'checkpoint.pt'))
+         
+                
+    train_loss /= len(train_generator.dataset)
+    train_loss *= batch_size
+    if writer is not None:
+        writer.add_scalar('Train/Loss/', train_loss, epoch)
+    if torch.cuda.device_count() > 1:
+        sigmas = model.module.sigma.cpu().detach().numpy()
+    else:
+        sigmas = model.sigma.cpu().detach().numpy()
+    for idx,sigma in enumerate(sigmas):
+        writer.add_scalar('Sigma/'+elems[idx], sigma, epoch)
+    losses/=num_losses    
+    aucs/=num_aucs 
+    writer.add_scalar('Train/AUC/', np.mean(aucs), epoch)
+    for i,auc in enumerate(aucs):
+        if f_loss_ch is not None and loss==loss:
+                f_loss_ch.write(str(epoch)+'\t'+str(batch_idx)+'\t'+str(i)+'\t'+str(auc)+'\n')
+                writer.add_scalar('Train/AUC/'+str(i), auc, epoch)
     return
         
         
 
 
-def test(model, test_generator,epoch,device,batch_size,num_targets=29,writer=None,f_loss=None, elements=None):
+def test_regression(model, test_generator,epoch,device,batch_size,num_targets=29,writer=None,f_loss=None, elements=None):
     """ Validation of trained model
 
         Parameters
@@ -484,91 +591,88 @@ def test(model, test_generator,epoch,device,batch_size,num_targets=29,writer=Non
             writer.add_scalar('Test/Loss/'+str(i), loss, epoch)
     return test_loss
 
-def train_opt(BATCH_SIZE, TRANSF, SIGMA, LR):
-    path = os.path.join(LOG_PATH,'iter_'+args.NUM_ITER)
-    original_umask = os.umask(0)
-    try:
-        original_umask = os.umask(0)
-        os.mkdir(path, mode = 0o777)
-    except FileExistsError:
-        files = os.listdir(path)
-        for f in files:
-            os.remove(os.path.join(path,f))
+def test_classification(model, test_generator,epoch,device,batch_size,num_targets=29,writer=None,f_loss=None, elements=None):
+    """ Validation of trained model
 
-    finally:
-        os.umask(original_umask)
-        LOG_PATH_ITER = path
+        Parameters
+        ----------
+        model
+            torch.nn.Module object to train
+        test_generator
+            torch.utils.data.DataLoader object, contain iterable set of torch.Tensor data (num_elems, dim,dim,dim) and torch.Tensor labels (num_targets, )
+        epoch
+            number of validated epoch
+        device
+            torch.device
+        writer
+            tensorboardX.SummaryWriter
+        f_loss
+            .txt file for test loss saving
+        elements
+            dictionary with {atom name : number} mapping
 
+        Returns
+        -------
+        test_loss
+            Loss for validation set
+        """
+    with torch.no_grad():
+        model.eval()
+        test_loss = 0
+        correct = 0
+        errors=0
+        losses=np.zeros(num_targets)
+        num_losses=np.zeros(num_targets)
+        aucs=np.zeros(TARGET_NUM)
+        num_aucs=np.zeros(TARGET_NUM)
+        for batch_idx, (data, target) in enumerate(test_generator):
+            data = data.to(device)
+            target = target.to(device)
+            output = model(data)   
+            i=0
+            for one_target,one_output in zip(target.cpu().t(),output.cpu().t()):
+                with torch.no_grad():
+                    mask = (one_target == one_target)
+                    output_masked = torch.masked_select(one_output, mask).type_as(one_output)
+                    target_masked = torch.masked_select(one_target, mask).type_as(one_output)
+                    pred = output_masked.ge(0.5).type_as(one_output)
+                    try:
+                        auc=roc_auc_score(target_masked.cpu(),pred.cpu())
+                        aucs[i]+=auc
+                        num_aucs+=1
+                    except ValueError:
+                        pass
 
-    path = os.path.join(MODEL_PATH,'iter_'+args.NUM_ITER)
-    print(path)
-    try:
-        original_umask = os.umask(0)
-        os.mkdir(path, 0o777)
-        print('Dir has been made')
-    except FileExistsError:
-        print('Dir already exists')
-        files = os.listdir(path)
-        for f in files:
-            os.remove(os.path.join(path,f))
-    finally:
-        print('finita')
-        os.umask(original_umask)
-        MODEL_PATH_ITER = path
-    
-    
-    BATCH_SIZE = 2**int(BATCH_SIZE)
-    if TRANSF>0.5:
-        TRANSF='w'
-    else:
-        TRANSF='g'
-        
-    LR=10**(-int(LR))
-    train_indexes, test_indexes, _, _ = train_test_split(np.arange(0, len(conf_calc.keys())),
-                                                         np.arange(0, len(conf_calc.keys())), test_size=0.2,
-                                                         random_state=115)
-    train_indexes,val_indexes, _, _ = train_test_split(train_indexes,
-                                                       train_indexes, test_size=0.5,
-                                                       random_state=115)
-    train_set = dl.Cube_dataset(conf_calc, label_dict, elements, indexing, train_indexes, dim = args.VOXEL_DIM)
-    train_generator = td.DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=True)
+                    i+=1
+            mask = (target == target)
+            output_masked = torch.masked_select(output, mask).type_as(output)
+            target_masked = torch.masked_select(target, mask).type_as(output)
+            penalty_masked = torch.masked_select(PENALTY.to(device), mask).type_as(output)
+            class_weights=(1-penalty_masked)*(target_masked).to(device)+penalty_masked
 
-    test_set = dl.Cube_dataset(conf_calc, label_dict, elements, indexing, test_indexes, dim = args.VOXEL_DIM)
-    test_generator = td.DataLoader(test_set, batch_size=BATCH_SIZE, shuffle=True)
-    model = Net(dim=args['VOXEL_DIM'], num_elems=AMOUNT_OF_ELEM, num_targets=TARGET_NUM, elements=elements, transformation=TRANSF,device=device,sigma_0 = SIGMA,sigma_trainable = args.SIGMA_TRAIN)
-    if torch.cuda.device_count() > 1:
-        model = nn.DataParallel(model)
-        print('Parallel!')
-    model=model.to(device)
-    
-    optimizer = torch.optim.Adam(model.parameters(), lr=LR)    
-    f_train_loss=open(os.path.join(LOG_PATH_ITER,str(args.NUM_EXP)+'_log_train_loss.txt'),'w')
-    f_train_loss_ch=open(os.path.join(LOG_PATH_ITER,str(args.NUM_EXP)+'_log_train_loss_channels.txt'),'w')
-    f_test_loss=open(os.path.join(LOG_PATH_ITER,str(args.NUM_EXP)+'_log_test_loss.txt'),'w')
-    writer=SummaryWriter(LOG_PATH_ITER)
+            criterion=nn.MSELoss()
+            loss = F.binary_cross_entropy(output_masked, target_masked,weight=class_weights)
 
-    early_stopping = EarlyStopping(patience=args.PATIENCE, verbose=True,model_path=MODEL_PATH_ITER)
-    
-    for epoch in range(1, args.EPOCHS_NUM + 1):
-        try:
-            train(model, optimizer, train_generator, epoch,device,writer=writer,f_loss=f_train_loss,f_loss_ch=f_train_loss_ch, elements=elements,batch_size = BATCH_SIZE)
-            test_loss = test(model, test_generator,epoch, device,writer=writer,f_loss=f_test_loss, elements=elements,batch_size = BATCH_SIZE)
-            early_stopping(test_loss, model)
+            test_loss += loss
+            pred = output_masked.ge(0.5).type_as(output)
+            
+            try:
+                auc=roc_auc_score(target_masked.cpu(),pred.cpu())
+                correct += auc
+            except ValueError:
+                errors+=1
+            
+        test_loss /= len(test_generator.dataset)
+        test_loss *= batch_size
 
-            if early_stopping.early_stop:
-                print(epoch,"Early stopping")
-                break
-            if epoch%10==0:
-                torch.save(model.state_dict(), os.path.join(MODEL_PATH_ITER, args['NUM_EXP']+'_model_'+str(epoch)))
-        except KeyError:
-            print(epoch,'Key Error problem')
-            pass
-    args.NUM_ITER+=1
-    
-    model.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint_es.pt')))
-    torch.save(model.state_dict(), os.path.join(MODEL_PATH, args.NUM_EXP+'_model'+str(epoch)+'_fin'))
-    f_train_loss.close()
-    f_test_loss.close()
-    writer.close()
-    return -test_loss
-        
+        print('\nTest set: Average loss: {:.4f}\n'
+              .format(test_loss))
+    if writer is not None:
+        writer.add_scalar('Test/Loss/', test_loss, epoch)
+    aucs/=num_aucs    
+    for i,auc in enumerate(aucss):
+        if f_loss is not None and loss == loss:
+            f_loss.write(str(epoch)+'\t'+str(batch_idx)+'\t'+str(i)+'\t'+str(auc)+'\n')
+            writer.add_scalar('Test/AUC/'+str(i), auc, epoch)
+    return test_loss
+

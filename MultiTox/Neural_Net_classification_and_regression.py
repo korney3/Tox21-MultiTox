@@ -1,6 +1,6 @@
 import load_data_multitox as ld
 import dataloaders_sigma as dl
-from Model_train_test_regression import Net, EarlyStopping, train, test
+from Model_train_test_regression import Net, EarlyStopping, train_regression, train_classification, test_regression#, test_classififcation
 
 import pandas as pd
 import numpy as np
@@ -35,11 +35,16 @@ AMOUNT_OF_ELEM = 9
 # amount of target values
 TARGET_NUM = 29
 
+#loss penalty for classification
+PENALTY = torch.FloatTensor([0.1,0.2,0.4,0.4,0.4,0.2,0.2,0.6,0.2,0.3,0.6,0.2])
+
+
 #dataset folder
 # DATASET_PATH="~/Tox21-MultiTox/MultiTox"
 DATASET_PATH = "/gpfs/gpfs0/a.alenicheva"
 
 TOX21_STORAGE = "../Tox21_Neural_Net"
+TOX21_STORAGE = "./"
 
 MULTITOX_STORAGE = "./"
 
@@ -84,7 +89,7 @@ parser.add_argument("-a", "--sigma_train",
                     help="regime of training sigma (True) or not (False). Default is False.",type=bool)
 parser.add_argument("-m", "--mode",
                     dest="MODE", default='r', choices =['r', 'c'],
-                    help="choosing classification ('c' option) or regression ('r' option) tasks. Default is 'r'",type=bool)
+                    help="choosing classification ('c' option) or regression ('r' option) tasks. Default is 'r'",type=str)
 parser.add_argument("-c", "--continue",
                     dest="CONTINUE", default=1,
                     help="number of epoch to continue training process from. Default is 1",type=int)
@@ -126,6 +131,7 @@ def main():
     global TOX21_STORAGE
     global MULTITOX_STORAGE
     global EXPERIMENTS_DATA
+    global PENALTY
     global args
     
     if args.MODE == "r":
@@ -135,7 +141,7 @@ def main():
     
     print(vars(args))
     path = os.path.join(LOG_PATH,'exp_'+args.NUM_EXP)
-    os.mkdirs(path, exist_ok=True)
+    os.makedirs(path, exist_ok=True)
 #     original_umask = os.umask(0)
     LOG_PATH = path
 #     try:
@@ -152,7 +158,7 @@ def main():
 
 
     path = os.path.join(MODEL_PATH,'exp_'+args.NUM_EXP)
-    os.mkdirs(path, exist_ok=True)
+    os.makedirs(path, exist_ok=True)
 #     original_umask = os.umask(0)
     MODEL_PATH = path
 #     try:
@@ -193,12 +199,16 @@ def main():
     # get dataset without duplicates from csv
     if args.MODE == 'r':
         data = pd.read_csv(os.path.join(MULTITOX_STORAGE,'database/data', 'MultiTox.csv'))
+        props = list(data)
+        props.remove("SMILES")
+        print(props)
+        scaler = MinMaxScaler()
+        data[props]=scaler.fit_transform(data[props])
     elif args.MODE == 'c':
         data = pd.read_csv(os.path.join(TOX21_STORAGE,'database/data', 'tox21_10k_data_all_no_salts.csv'))
         
-    props = list(data).remove("SMILES")
-    scaler = MinMaxScaler()
-    data[props]=scaler.fit_transform(data[props])
+        
+    
 
     # create elements dictionary
 #     elements = ld.create_element_dict(data, amount=AMOUNT_OF_ELEM+1)
@@ -208,7 +218,7 @@ def main():
     if args.MODE == "r":
         conf_calc = ld.reading_sql_database(database_dir=os.path.join(DATASET_PATH,"MultiTox"))
     elif args.MODE == "c":
-        conf_calc = ld.reading_sql_database(database_dir=os.path.join(DATASET_PATH,"Tox21"))
+        conf_calc = ld.reading_sql_database(database_dir=os.path.join(DATASET_PATH,"Tox21", "elements_9"))
 #     with open(os.path.join(DATASET_PATH,'many_elems.json'), 'r') as fp:
 #         conf_calc = json.load(fp)
     
@@ -264,7 +274,7 @@ def main():
     test_set = dl.Cube_dataset(conf_calc, label_dict, elements, indexing, test_indexes, dim = args.VOXEL_DIM)
     test_generator = td.DataLoader(test_set, batch_size=args.BATCH_SIZE, shuffle=True)
     
-    model = Net(dim=args.VOXEL_DIM, num_elems=AMOUNT_OF_ELEM, num_targets=TARGET_NUM, elements=elements, transformation=args.TRANSF,device=device,sigma_0 = args.SIGMA,sigma_trainable = args.SIGMA_TRAIN)
+    model = Net(dim=args.VOXEL_DIM, num_elems=AMOUNT_OF_ELEM, num_targets=TARGET_NUM, elements=elements, transformation=args.TRANSF,device=device,sigma_0 = args.SIGMA,sigma_trainable = args.SIGMA_TRAIN, mode = args.MODE)
     
     with open(os.path.join(LOG_PATH,args.NUM_EXP+'_parameters.json'),'w') as f:
         json.dump(vars(args), f)
@@ -278,10 +288,14 @@ def main():
     # Construct our model by instantiating the class defined above
 
     model=model.to(device)
-     
-    model.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint.pt')))
+    
+    if args.CONTINUE>1:
+        model_checkpoints = os.listdir(MODEL_PATH)
+        if 'checkpoint_es.pt' in model_checkpoints:
+            model.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint_es.pt')))
+        elif 'checkpoint.pt' in model_checkpoints:
+            model.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint.pt')))
 
-        
 
     for name, param in model.named_parameters():
         print(name, type(param.data), param.size())
@@ -306,10 +320,16 @@ def main():
         with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
             f_log.write('Epoch , '+str(epoch)+'\n')
         try:
-            train(model, optimizer, train_generator, epoch,device,writer=writer,f_loss=f_train_loss,f_loss_ch=f_train_loss_ch, elements=elements,batch_size = args.BATCH_SIZE,MODEL_PATH=MODEL_PATH)
-            test_loss = test(model, test_generator,epoch, device,writer=writer,f_loss=f_test_loss, elements=elements,batch_size = args.BATCH_SIZE)
-            early_stopping(test_loss, model)
-
+            if args.MODE == 'r':
+                train_regression(model, optimizer, train_generator, epoch,device,writer=writer,f_loss=f_train_loss,f_loss_ch=f_train_loss_ch, elements=elements,batch_size = args.BATCH_SIZE,MODEL_PATH=MODEL_PATH)
+                test_loss = test_regression(model, test_generator,epoch, device,writer=writer,f_loss=f_test_loss, elements=elements,batch_size = args.BATCH_SIZE)
+                early_stopping(test_loss, model)
+                
+            elif args.MODE == 'c':
+                train_classification(model, optimizer, train_generator, epoch,device,writer=writer,f_loss=f_train_loss,f_loss_ch=f_train_loss_ch, elements=elements,batch_size = args.BATCH_SIZE,MODEL_PATH=MODEL_PATH, PENALTY = PENALTY)
+                test_loss = test_classification(model, test_generator,epoch, device,writer=writer,f_loss=f_test_loss, elements=elements,batch_size = args.BATCH_SIZE, PENALTY = PENALTY)
+                early_stopping(test_loss, model)
+    
             if early_stopping.early_stop:
                 print(epoch,"Early stopping")
                 break
