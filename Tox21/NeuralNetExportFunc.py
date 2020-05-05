@@ -14,16 +14,18 @@ import torch.nn.functional as F
 
 import sys 
 import os
+import time
 
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score
+from sklearn.preprocessing import MinMaxScaler
+
 
 from tensorboardX import SummaryWriter
 
-from Model_train_test_regression import EarlyStopping, train_regression, train_classification as train, test_regression, test_classification as test
+from Model_train_test_regression import EarlyStopping
 
-from Model_train_test_regression import Net_without_transform as Net
-
+import json
 
 # number of conformers created for every molecule
 NUM_CONFS = 100
@@ -41,13 +43,16 @@ BATCH_SIZE = 32
 # TARGET_NUM = 12
 
 #dataset folder
-DATASET_PATH="/gpfs/gpfs0/a.alenicheva/Tox21/elements_9"
+DATASET_PATH="/gpfs/gpfs0/a.alenicheva"
 
 #logs path
 LOG_PATH="./Documents/Tox21_Neural_Net"
 
 #models path
 MODEL_PATH="./Documents/Tox21_Neural_Net"
+
+#multitox csv dir
+MULTITOX_STORAGE = "../MultiTox"
 
 #number of epochs
 # EPOCHS_NUM=100
@@ -115,14 +120,25 @@ def main():
     global PENALTY
     global PATIENCE
     global SIGMA
+    global MULTITOX_STORAGE
     
     global args
+    
+    
 
     if args.MODE == "r":
         TARGET_NUM = 29
+        from Model_train_test_regression import train_regression as train, test_regression as test
     elif args.MODE == "c":
         TARGET_NUM = 12
+        from Model_train_test_regression import train_classification as train, test_classification as test
+    
+    if args.SIGMA_TRAIN:
+        from Model_train_test_regression import Net_with_transform as Net
+    else:
+        from Model_train_test_regression import Net_without_transform as Net
         
+    # create log directories
     path = os.path.join(LOG_PATH,'exp_'+args.NUM_EXP)
     os.makedirs(path, exist_ok=True)
     LOG_PATH = path
@@ -132,13 +148,22 @@ def main():
     os.makedirs(path, exist_ok=True)
     MODEL_PATH = path
     
-    # setting device on GPU if available, else CPU
-    writer=SummaryWriter(LOG_PATH)
+    with open(os.path.join(LOG_PATH,args.NUM_EXP+'_parameters.json'),'w') as f:
+        json.dump(vars(args), f)
     
+    # setting log files
+    # writer - tensorboard writer
+    # f_log - file with progress messages
+    writer=SummaryWriter(LOG_PATH)
     f_log=open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'w')
     f_log.close()
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    
+    # setting device
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     print('Using device:', device)
+    with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+        f_log.write('Using device:'+str(device)+'\n')
+        f_log.write('Number of devices:'+str(torch.cuda.device_count())+'\n')
     print()
     #Additional Info when using cuda
     if device.type == 'cuda':
@@ -146,8 +171,14 @@ def main():
         print('Memory Usage:')
         print('Allocated:', round(torch.cuda.memory_allocated(0)/1024**3,1), 'GB')
         print('Cached:   ', round(torch.cuda.memory_cached(0)/1024**3,1), 'GB')
+        with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+            f_log.write(torch.cuda.get_device_name(0)+'\n'+'Memory Usage:'+'\n'+'Allocated:'+str(round(torch.cuda.memory_allocated(0)/1024**3,1))+ 'GB'+'\n'+'Cached:   '+str(round(torch.cuda.memory_cached(0)/1024**3,1))+'GB'+'\n')
+            
+    # loading dataset from .csv file
     print('Start loading dataset...')
-    # get dataset without duplicates from csv
+    with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+        f_log.write('Start loading dataset...'+'\n')
+    start_time=time.time()
     
     if args.MODE == 'r':
         with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
@@ -177,9 +208,7 @@ def main():
  'O': 7,
  'C': 8}
 
-    # read databases to dictionary
-#     conf_calc = ld.reading_sql_database(os.path.join(DATASET_PATH, 'tox21_10k_data_all_no_salts.db'))
-
+    # read databases from .db files to dictionary
     if args.MODE == "r":
         with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
                 f_log.write('Regression mode load database'+'\n')
@@ -187,55 +216,125 @@ def main():
     elif args.MODE == "c":
         with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
             f_log.write('Classification mode load database'+'\n')
-        conf_calc = ld.reading_sql_database(os.path.join(DATASET_PATH))
-
+        conf_calc = ld.reading_sql_database(os.path.join(DATASET_PATH, 'Tox21','elements_9'))
+    # remove broken molecules
     keys=list(conf_calc.keys())
     print ('Initial dataset size = ', len(keys))
+    with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+            f_log.write('Initial dataset size = '+str(len(keys))+'\n')
+    new_conf_calc={}
+    for smiles in conf_calc.keys():
+        for conf_num in conf_calc[smiles]:
+            if smiles in new_conf_calc.keys():
+                new_conf_calc[smiles][int(conf_num)]=conf_calc[smiles][conf_num]
+            else:
+                new_conf_calc[smiles]={}
+                new_conf_calc[smiles][int(conf_num)]=conf_calc[smiles][conf_num]
+
+    conf_calc=new_conf_calc
+    
+    elems = []
     for key in keys:
         conformers=list(conf_calc[key].keys())
         for conformer in conformers:
             try:
-                conf_calc[key][conformer]['energy']
+                energy = conf_calc[key][conformer]['energy']
+                elems = list(set(elems+list(conf_calc[key][conformer]['coordinates'].keys())))
             except:
                 del conf_calc[key][conformer]
-        if conf_calc[key]=={}:
+        if set(conf_calc[key].keys())!=set(range(100)):
+              del conf_calc[key]
+        elif conf_calc[key]=={}:
             del conf_calc[key]
     print ('Post-processed dataset size = ', len(list(conf_calc.keys())))
+    with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+        f_log.write('Post-processed dataset size = '+str(len(list(conf_calc.keys())))+'\n')
     # create indexing and label_dict for iteration
     indexing, label_dict = ld.indexing_label_dict(data, conf_calc)
-    print('Dataset has been loaded')
+    print('Dataset has been loaded, ', int(time.time()-start_time),' s')
+    with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+        f_log.write('Dataset has been loaded, '+str(int(time.time()-start_time))+' s'+'\n')
+    
+    # set dataloaders
     # create train and validation sets' indexes
     print('Neural network initialization...')
-    
+    with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+        f_log.write('Neural network initialization...'+'\n')
+    start_time=time.time()
     train_indexes, test_indexes, _, _ = train_test_split(np.arange(0, len(conf_calc.keys())),
                                                          np.arange(0, len(conf_calc.keys())), test_size=0.2,
                                                          random_state=42)
+    if args.SIGMA_TRAIN:
+        with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+            f_log.write('Sigma train dataloader'+'\n')
+        pass
+    else:
+        with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+            f_log.write('Not sigma train dataloader'+'\n')
+        if args.TRANSF == 'g':
+            with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+                f_log.write('Gauss mode'+'\n')
+            train_set = dl.Gauss_dataset(conf_calc, label_dict, elements, indexing, train_indexes, sigma=args.SIGMA, dim = args.VOXEL_DIM)
+            train_generator = td.DataLoader(train_set, batch_size=args.BATCH_SIZE, shuffle=True)
 
-    # make dataloader for Gauss transformation
-    train_set = dl.Gauss_dataset(conf_calc, label_dict, elements, indexing, train_indexes, sigma=args.SIGMA, dim = args.VOXEL_DIM)
-    train_generator = td.DataLoader(train_set, batch_size=args.BATCH_SIZE, shuffle=True)
+            test_set = dl.Gauss_dataset(conf_calc, label_dict, elements, indexing, test_indexes, sigma=args.SIGMA, dim = args.VOXEL_DIM)
+            test_generator = td.DataLoader(test_set, batch_size=args.BATCH_SIZE, shuffle=False)
+        elif args.TRANSF == 'w':
+            with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+                f_log.write('Waves mode'+'\n')
+            train_set = dl.Waves_dataset(conf_calc, label_dict, elements, indexing, train_indexes, sigma=args.SIGMA, dim = args.VOXEL_DIM)
+            train_generator = td.DataLoader(train_set, batch_size=args.BATCH_SIZE, shuffle=True)
 
-    test_set = dl.Gauss_dataset(conf_calc, label_dict, elements, indexing, test_indexes, sigma=args.SIGMA, dim = args.VOXEL_DIM)
-    test_generator = td.DataLoader(test_set, batch_size=args.BATCH_SIZE, shuffle=False)
-
-    # make dataloader for Waves transformation
-#     train_set = dl.Waves_dataset(conf_calc, label_dict, elements, indexing, train_indexes, sigma=SIGMA)
-#     train_generator = td.DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=True)
-
-#     test_set = dl.Waves_dataset(conf_calc, label_dict, elements, indexing, test_indexes, sigma=SIGMA)
-#     test_generator = td.DataLoader(test_set, batch_size=BATCH_SIZE, shuffle=False)
-
-    # Construct our model by instantiating the class defined above
-    model = Net(dim=args.VOXEL_DIM, num_elems=AMOUNT_OF_ELEM, num_targets=TARGET_NUM, device=device, mode=args.MODE)
+            test_set = dl.Waves_dataset(conf_calc, label_dict, elements, indexing, test_indexes, sigma=args.SIGMA, dim = args.VOXEL_DIM)
+            test_generator = td.DataLoader(test_set, batch_size=args.BATCH_SIZE, shuffle=False)
+                                        
+    # set model
+    if args.SIGMA_TRAIN:
+        with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+            f_log.write('Sigma train model'+'\n')               
+        pass
+    else:
+        with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+            f_log.write('Not sigma train model'+'\n')                                
+        if args.TRLEARNING:
+            with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+                f_log.write('transfer learning model'+'\n')
+            pass
+        else:
+            with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+                f_log.write('Not transfer model'+'\n')
+            model = Net(dim=args.VOXEL_DIM, num_elems=AMOUNT_OF_ELEM, num_targets=TARGET_NUM, device=device, mode=args.MODE)
+                                                                          
+    if args.CONTINUE>1:
+        with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+            f_log.write('Continue mode'+'\n')
+        pass
+    else:
+        pass
+                                        
     print(model)
+    print("Let's use ", torch.cuda.device_count(), " GPUs!")
+    with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+            f_log.write("Let's use "+ str(torch.cuda.device_count())+ " GPUs!"+'\n')
+    if torch.cuda.device_count() > 1:
+        model = nn.DataParallel(model)
+        print ('Run in parallel!')
+        with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+            f_log.write('Run in parallel!'+'\n')
     model=model.to(device)
 
     # set optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
     print('Neural network has been initialized')
+    with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+        f_log.write('Neural network has been initialized, '+str(int(time.time()-start_time))+' s'+'\n')
     
+    # set log txt files
     f_train_loss=open(LOG_PATH+'/log_train_loss.txt','w')
+    f_train_loss_ch=open(os.path.join(LOG_PATH,args.NUM_EXP+'_log_train_loss_channels.txt'),'w')
+    
     f_test_loss=open(LOG_PATH+'/log_test_loss.txt','w')
+
     f_train_auc=open(LOG_PATH+'/log_train_auc.txt','w')
     f_test_auc=open(LOG_PATH+'/log_test_auc.txt','w')
     
@@ -243,21 +342,34 @@ def main():
 
     
     # train procedure
+    start_time=time.time()
     for epoch in range(1, args.EPOCHS_NUM + 1):
+        with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+            f_log.write('Epoch, '+str(epoch)+'\n')
         try:
 #            train(model, optimizer, train_generator_waves, epoch,device,f_auc=f_train_auc,f_loss=f_train_loss)
 #            test(model, test_generator_waves,epoch, device,f_auc=f_test_auc,f_loss=f_test_loss)
-            train(model, optimizer, train_generator, epoch,device,batch_size=args.BATCH_SIZE, writer=writer,f_loss=f_train_loss, f_loss_ch = f_train_auc, elements = elements, MODEL_PATH = MODEL_PATH, PENALTY = PENALTY)
-            test_loss = test(model, test_generator,epoch, device,batch_size=args.BATCH_SIZE,writer=writer,f_loss=f_test_loss, elements = elements, PENALTY = PENALTY)
+            if args.MODE == 'r':
+                with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+                    f_log.write('Regression'+'\n')
+                train (model, optimizer, train_generator, epoch,device,writer=writer,f_loss=f_train_loss,f_loss_ch=f_train_loss_ch, elements=elements,batch_size = args.BATCH_SIZE,MODEL_PATH=MODEL_PATH, sigma_train = args.SIGMA_TRAIN)
+                test_loss = test(model, test_generator,epoch, device,writer=writer,f_loss=f_test_loss, elements=elements,batch_size = args.BATCH_SIZE)
+            elif args.MODE=='c':
+                with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+                    f_log.write('Classification'+'\n')
+                train(model, optimizer, train_generator, epoch,device,batch_size=args.BATCH_SIZE, writer=writer,f_loss=f_train_loss, f_loss_ch = f_train_auc, elements = elements, MODEL_PATH = MODEL_PATH, PENALTY = PENALTY)
+                test_loss = test(model, test_generator,epoch, device,batch_size=args.BATCH_SIZE,writer=writer,f_loss=f_test_loss, elements = elements, PENALTY = PENALTY)
             
+        
+            early_stopping(test_loss, model)
+
+            if early_stopping.early_stop:
+                print("Early stopping")
+                break
         except KeyError:
             print('Key Error problem')
-        early_stopping(test_loss, model)
-
-        if early_stopping.early_stop:
-            print("Early stopping")
-            break
-        torch.save(model.state_dict(), os.path.join(MODEL_PATH, 'model'+str(epoch)))
+        if epoch%10==0:
+            torch.save(model.state_dict(), os.path.join(MODEL_PATH, 'model'+str(epoch)))
     model.load_state_dict(torch.load('checkpoint.pt'))
     torch.save(model.state_dict(), os.path.join(MODEL_PATH, 'model'+str(epoch)+'_fin'))
     f_train_loss.close()
