@@ -2,7 +2,7 @@
 #import all the necessary libraries
 
 import numpy as np
-from rdkit import Chem
+# from rdkit import Chem
 import matplotlib.pyplot as plt
 import torch
 import sqlite3
@@ -20,7 +20,7 @@ AMOUNT_OF_ELEM=6
 def create_element_dict(data,amount=AMOUNT_OF_ELEM,treshold=10):
     elements={}
     norm=0
-    for smile in data['smiles_no_salt']:
+    for smile in data['SMILES']:
         molecule=Chem.MolFromSmiles(smile)
         molecule=Chem.AddHs(molecule)
         
@@ -75,11 +75,11 @@ def reading_sql_database(filename='tox21_conformers.db'):
 #and dictionary of labels for each smile label_dict {smile:labels}
 def indexing_label_dict(data,conf_calc):
     props=list(data)
-    props.remove('smiles_no_salt')
+    props.remove('SMILES')
     label_dict={}
     indexing={}
     for (i,smiles) in enumerate(conf_calc.keys()):
-        labels=data.loc[data['smiles_no_salt']==smiles][props].values[0]
+        labels=data.loc[data['SMILES']==smiles][props].values[0]
         label_dict[smiles]=torch.from_numpy(labels)
         indexing[i]=smiles
         

@@ -1,36 +1,51 @@
 # -*- coding: utf-8 -*-
 
 #import all the necessary libraries
-
-
 import numpy as np
 
 import torch
 from torch.utils import data as td
 
-#number of conformers created for every molecule
-global NUM_CONFS
-NUM_CONFS=100
-
-#amount of chemical elements taking into account
-global AMOUNT_OF_ELEM
-AMOUNT_OF_ELEM=6
-
-#choosing conformer of molecule according to probability
-#input - dictionary of molecule conformers and its properties {conformer id: [probability of choice,
-#[coordinates of atom]],...}
-#output - number of conformer
-
 def conformer_choice(props):
+    """choosing conformer of molecule according to probability
+
+        Parameters
+        ----------
+        props
+            dictionary of molecule conformers and its properties {conformer id: [probability of choice,[coordinates of atom]],...}
+
+        Returns
+        -------
+        np.asscalar(conformer)
+            number of conformer
+        """
     probabilities=[props[key]['energy'] for key in props.keys()]
     conformer=np.random.choice(range(len(props)),1,probabilities)
     return np.asscalar(conformer)
 
-#gaussian blur 3D cordinate transformation
-#input - molecule - dictionary{atom:[(x1,x2,x3),...]}
-#sigma - parameter of kernel
+def gaussian_blur(molecule,elements,sigma=3,dimx=50,dx=0.5,kern_dim=50):
+    """calculate gaussian blur of the molecule
 
-def gaussian_blur(molecule,elements,sigma=2,dimx=70,dx=0.5,kern_dim=50):
+        Parameters
+        ----------
+        molecule
+            dictionary {type of atom:[(x1,x2,x3),...]}
+        elements
+            dictionary {type of atom:number}
+        sigma
+            integer or vector of sigma parameter
+        dimx
+            integer of size of cube of voxels
+        dx
+            float angstrom per grid cell
+        kern_dim
+            integer size of kernel in voxels
+
+        Returns
+        -------
+        cube
+            transformed voxels of molecule
+        """
     from math import floor
     
     dimelem=len(elements)
@@ -79,13 +94,34 @@ def gaussian_blur(molecule,elements,sigma=2,dimx=70,dx=0.5,kern_dim=50):
                  coord_ranges[1][0]:coord_ranges[1][1],
                  coord_ranges[2][0]:coord_ranges[2][1]]=cube_part
 
+    cube-=cube.min()
+    cube/=cube.max()
     return cube
 
-#waves 3D cordinate transformation
-#input - molecule - dictionary{atom:[(x1,x2,x3),...]}
-#sigma - parameter of kernel
 
-def waves(molecule,elements,sigma=1,dimx=70,dx=0.5,kern_dim=50):
+def waves(molecule,elements,sigma=6,dimx=50,dx=0.5,kern_dim=50):
+    """calculate waves transformation of the molecule
+
+        Parameters
+        ----------
+        molecule
+            dictionary {type of atom:[(x1,x2,x3),...]}
+        elements
+            dictionary {type of atom:number}
+        sigma
+            integer or vector of sigma parameter
+        dimx
+            integer of size of cube of voxels
+        dx
+            float angstrom per grid cell
+        kern_dim
+            integer size of kernel in voxels
+
+        Returns
+        -------
+        cube
+            transformed voxels of molecule
+        """
     from math import floor
     omega=1/sigma
     dimelem=len(elements)
@@ -132,11 +168,36 @@ def waves(molecule,elements,sigma=1,dimx=70,dx=0.5,kern_dim=50):
             cube[num_atom,coord_ranges[0][0]:coord_ranges[0][1],
                  coord_ranges[1][0]:coord_ranges[1][1],
                  coord_ranges[2][0]:coord_ranges[2][1]]=cube_part
+    cube-=cube.min()
+    cube/=cube.max()
     return cube
 
-#class of dataset created by gauss transformation
 class Gauss_dataset(td.Dataset):
-    def __init__(self,conf_calc,label_dict,elements,indexing, indexes, sigma=1,dim=70,dx=0.5,kern_dim=50):
+    """
+    The Gauss_dataset constructs transformed with gaussian blur tensor of shape (num_elems, dim, dim ,dim) from smiles molecule description.
+
+    Attributes
+    ----------
+    Xs : dict {smile:conformer:{energy:,coordinates:}}
+        Dictionary with stored molecules and conformers info
+    Ys : dict
+        Dictionary contained labels for molecules
+    elements: dict
+        Dictionary with {atom name : number} mapping
+    indexing : dict
+        Dictionary with mapping number to smiles
+    dx : float
+        Size of grid cell in Angstrom
+    indexes : list
+        Set of indexes from indexing to  make dataset from
+    dim : int
+        Size of cube
+    sigma : float
+        Parameter of transformation
+    kern_dim : int
+        Size of kernel for transformation
+    """
+    def __init__(self,conf_calc,label_dict,elements,indexing, indexes, sigma=3,dim=50,dx=0.5,kern_dim=50):
         self.Xs=conf_calc
         self.Ys=label_dict
         self.elements=elements
@@ -164,9 +225,32 @@ class Gauss_dataset(td.Dataset):
         
         return X, y
     
-#class of dataset created by waves transformation
 class Waves_dataset(td.Dataset):
-    def __init__(self,conf_calc,label_dict,elements,indexing,indexes, sigma=1,dim=70,dx=0.5,kern_dim=50):
+    """
+    The Gauss_dataset constructs transformed with waves tensor of shape (num_elems, dim, dim ,dim) from smiles molecule description.
+
+    Attributes
+    ----------
+    Xs : dict {smile:conformer:{energy:,coordinates:}}
+        Dictionary with stored molecules and conformers info
+    Ys : dict
+        Dictionary contained labels for molecules
+    elements: dict
+        Dictionary with {atom name : number} mapping
+    indexing : dict
+        Dictionary with mapping number to smiles
+    dx : float
+        Size of grid cell in Angstrom
+    indexes : list
+        Set of indexes from indexing to  make dataset from
+    dim : int
+        Size of cube
+    sigma : float
+        Parameter of transformation
+    kern_dim : int
+        Size of kernel for transformation
+    """
+    def __init__(self,conf_calc,label_dict,elements,indexing,indexes, sigma=6,dim=50,dx=0.5,kern_dim=50):
         self.Xs=conf_calc
         self.Ys=label_dict
         self.elements=elements

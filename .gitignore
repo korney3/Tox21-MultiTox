@@ -8,3 +8,6 @@ MultiTox/logs_sigma/
 Tox21/experiments/
 Tox21_Neural_Net/logs/
 Tox21_Neural_Net/models/
+*.sl
+*.out
+Tox21/Documents/

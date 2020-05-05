@@ -28,7 +28,7 @@ AMOUNT_OF_ELEM = 6
 
 # size of batch
 global BATCH_SIZE
-BATCH_SIZE = 16 
+BATCH_SIZE = 32
 
 # dimension of voxel with conformer
 global VOXEL_DIM
@@ -40,15 +40,15 @@ TARGET_NUM = 12
 
 #dataset folder
 global DATASET_PATH
-DATASET_PATH="./Documents/Tox21_Neural_Net/database"
+DATASET_PATH="/gpfs/gpfs0/a.alenicheva/Tox21/elements_6"
 
 #logs path
 global LOG_PATH
-LOG_PATH="./Documents/Tox21_Neural_Net/logs"
+LOG_PATH="./Documents/Tox21_Neural_Net/logs3"
 
 #models path
 global MODEL_PATH
-MODEL_PATH="./Documents/Tox21_Neural_Net/models"
+MODEL_PATH="./Documents/Tox21_Neural_Net/models3"
 
 #number of epochs
 global EPOCHS_NUM
@@ -64,7 +64,7 @@ PATIENCE = 25
 
 #sigma parameter for preprocessing
 global SIGMA
-SIGMA = 7
+SIGMA = 6
 
 
 # create train and validation functions
@@ -157,7 +157,7 @@ def test(model, test_generator,epoch,device,writer=None,f_loss=None,f_auc=None):
                 try:
                     auc=roc_auc_score(target_masked.cpu(),pred.cpu())
                     aucs[i]+=auc
-                    num_aucs+=1
+                    num_aucs[i]+=1
                     f_auc.write(str(epoch)+'\t'+str(batch_idx)+'\t'+str(i)+'\t'+str(auc)+'\n')
                 except ValueError:
                     pass
@@ -306,13 +306,14 @@ def main():
     print('Start loading dataset...')
     # get dataset without duplicates from csv
     
-    data = pd.read_csv(os.path.join(DATASET_PATH, 'tox21_10k_data_all_no_salts.csv'))
+    data = pd.read_csv(os.path.join('../Tox21_Neural_Net/database', 'tox21_10k_data_all_no_salts.csv'))
 
     # create elements dictionary
-    elements = ld.create_element_dict(data, amount=AMOUNT_OF_ELEM)
+#     elements = ld.create_element_dict(data, amount=AMOUNT_OF_ELEM)
+    elements = {'S': 0, 'Cl': 1, 'N': 2, 'O': 3, 'C': 4, 'H': 5}
 
     # read databases to dictionary
-    conf_calc = ld.reading_sql_database(os.path.join(DATASET_PATH, 'tox21_conformers.db'))
+    conf_calc = ld.reading_sql_database(os.path.join(DATASET_PATH, 'tox21_conformers_6_elements.db'))
     keys=list(conf_calc.keys())
     print ('Initial dataset size = ', len(keys))
     for key in keys:
@@ -333,21 +334,21 @@ def main():
     
     train_indexes, test_indexes, _, _ = train_test_split(np.arange(0, len(conf_calc.keys())),
                                                          np.arange(0, len(conf_calc.keys())), test_size=0.2,
-                                                         random_state=115)
+                                                         random_state=42)
 
     # make dataloader for Gauss transformation
-    train_set = dl.Gauss_dataset(conf_calc, label_dict, elements, indexing, train_indexes, sigma=SIGMA)
-    train_generator = td.DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=True)
+#     train_set = dl.Gauss_dataset(conf_calc, label_dict, elements, indexing, train_indexes, sigma=SIGMA)
+#     train_generator = td.DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=True)
 
-    test_set = dl.Gauss_dataset(conf_calc, label_dict, elements, indexing, test_indexes, sigma=SIGMA)
-    test_generator = td.DataLoader(test_set, batch_size=BATCH_SIZE, shuffle=False)
+#     test_set = dl.Gauss_dataset(conf_calc, label_dict, elements, indexing, test_indexes, sigma=SIGMA)
+#     test_generator = td.DataLoader(test_set, batch_size=BATCH_SIZE, shuffle=False)
 
     # make dataloader for Waves transformation
-#    train_set = dl.Waves_dataset(conf_calc, label_dict, elements, indexing, train_indexes, sigma=SIGMA)
-#    train_generator = td.DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=True)
-#
-#    test_set = dl.Waves_dataset(conf_calc, label_dict, elements, indexing, test_indexes, sigma=SIGMA)
-#    test_generator = td.DataLoader(test_set, batch_size=BATCH_SIZE, shuffle=False)
+    train_set = dl.Waves_dataset(conf_calc, label_dict, elements, indexing, train_indexes, sigma=SIGMA)
+    train_generator = td.DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=True)
+
+    test_set = dl.Waves_dataset(conf_calc, label_dict, elements, indexing, test_indexes, sigma=SIGMA)
+    test_generator = td.DataLoader(test_set, batch_size=BATCH_SIZE, shuffle=False)
 
     # Construct our model by instantiating the class defined above
     model = Net(dim=VOXEL_DIM, num_elems=AMOUNT_OF_ELEM, num_targets=TARGET_NUM, batch_size=BATCH_SIZE)

@@ -1,6 +1,7 @@
 import load_data_multitox as ld
-import dataloaders_sigma as dl
-from Model_train_test_regression import Net, EarlyStopping, train_regression, train_classification, test_regression, test_classification
+import dataloaders_sigma as dlsigma
+import dataloaders as dl
+from Model_train_test_regression import EarlyStopping, train_regression, train_classification, test_regression, test_classification
 
 import pandas as pd
 import numpy as np
@@ -44,7 +45,7 @@ PENALTY = torch.FloatTensor([0.1,0.2,0.4,0.4,0.4,0.2,0.2,0.6,0.2,0.3,0.6,0.2])
 DATASET_PATH = "/gpfs/gpfs0/a.alenicheva"
 
 TOX21_STORAGE = "../Tox21_Neural_Net"
-TOX21_STORAGE = "./"
+# TOX21_STORAGE = "./"
 
 MULTITOX_STORAGE = "./"
 
@@ -80,7 +81,7 @@ parser.add_argument("-n", "--num_exp",
                     help="number of current experiment")
 parser.add_argument("-v", "--voxel_dim",
                     dest="VOXEL_DIM", default=50,
-                    help="size of produced voxel cube. Default is 50.")
+                    help="size of produced voxel cube. Default is 50.", type=int)
 parser.add_argument("-r", "--learn_rate",
                     dest="LEARN_RATE", default=1e-5,
                     help="learning rate for optimizer. Default is 1e-5.",type=float)
@@ -127,7 +128,6 @@ def main():
     global MODEL_PATH
     global DATASET_PATH
     global TARGET_NUM
-    global VOXEL_DIM
     global AMOUNT_OF_ELEM
     global LOG_PATH
     global NUM_CONFS
@@ -141,6 +141,11 @@ def main():
         TARGET_NUM = 29
     elif args.MODE == "c":
         TARGET_NUM = 12
+        
+    if args.SIGMA_TRAIN:
+        from Model_train_test_regression import Net_with_transform as Net
+    else:
+        from Model_train_test_regression import Net_without_transform as Net
     
     print(vars(args))
     path = os.path.join(LOG_PATH,'exp_'+args.NUM_EXP)
@@ -201,6 +206,8 @@ def main():
         f_log.write('Start loading dataset...'+'\n')
     # get dataset without duplicates from csv
     if args.MODE == 'r':
+        with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+            f_log.write('Regression mode'+'\n')
         data = pd.read_csv(os.path.join(MULTITOX_STORAGE,'database/data', 'MultiTox.csv'))
         props = list(data)
         props.remove("SMILES")
@@ -208,19 +215,32 @@ def main():
         scaler = MinMaxScaler()
         data[props]=scaler.fit_transform(data[props])
     elif args.MODE == 'c':
-        data = pd.read_csv(os.path.join(TOX21_STORAGE,'database/data', 'tox21_10k_data_all_no_salts.csv'))
+        with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+            f_log.write('Classification mode'+'\n')
+        data = pd.read_csv(os.path.join(TOX21_STORAGE,'database', 'tox21_10k_data_all_no_salts.csv'))
         
         
     
 
     # create elements dictionary
 #     elements = ld.create_element_dict(data, amount=AMOUNT_OF_ELEM+1)
-    elements={"N":0,"C":1,"Cl":2,"I":3,"Br":4,"F":5,"O":6,"P":7,"S":8}
-    
+    elements = {'I': 0,
+ 'P': 1,
+ 'Br': 2,
+ 'F': 3,
+ 'S': 4,
+ 'Cl': 5,
+ 'N': 6,
+ 'O': 7,
+ 'C': 8}
     # read databases to dictionary
     if args.MODE == "r":
+        with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+            f_log.write('Regression mode load database'+'\n')
         conf_calc = ld.reading_sql_database(database_dir=os.path.join(DATASET_PATH,"MultiTox"))
     elif args.MODE == "c":
+        with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+            f_log.write('Classification mode load database'+'\n')
         conf_calc = ld.reading_sql_database(database_dir=os.path.join(DATASET_PATH,"Tox21", "elements_9"))
 #     with open(os.path.join(DATASET_PATH,'many_elems.json'), 'r') as fp:
 #         conf_calc = json.load(fp)
@@ -271,21 +291,54 @@ def main():
     train_indexes, test_indexes, _, _ = train_test_split(np.arange(0, len(conf_calc.keys())),
                                                          np.arange(0, len(conf_calc.keys())), test_size=0.2,
                                                          random_state=115)
-    train_set = dl.Cube_dataset(conf_calc, label_dict, elements, indexing, train_indexes, dim = args.VOXEL_DIM)
-    train_generator = td.DataLoader(train_set, batch_size=args.BATCH_SIZE, shuffle=True)
+    if args.SIGMA_TRAIN:
+        with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+            f_log.write('sigma train mode'+'\n')
+        train_set = dlsigma.Cube_dataset(conf_calc, label_dict, elements, indexing, train_indexes, dim = args.VOXEL_DIM)
 
-    test_set = dl.Cube_dataset(conf_calc, label_dict, elements, indexing, test_indexes, dim = args.VOXEL_DIM)
-    test_generator = td.DataLoader(test_set, batch_size=args.BATCH_SIZE, shuffle=True)
-    
-    if args.TRLEARNING:
-        model = Net(dim=args.VOXEL_DIM, num_elems=AMOUNT_OF_ELEM, num_targets=29, elements=elements, transformation=args.TRANSF,device=device,sigma_0 = args.SIGMA,sigma_trainable = args.SIGMA_TRAIN, mode = args.MODE)
+        test_set = dlsigma.Cube_dataset(conf_calc, label_dict, elements, indexing, test_indexes, dim = args.VOXEL_DIM)
+
+        if args.TRLEARNING:
+            with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+                f_log.write('transfer learning'+'\n')
+            model = Net(dim=args.VOXEL_DIM, num_elems=AMOUNT_OF_ELEM, num_targets=29, elements=elements, transformation=args.TRANSF,device=device,sigma_0 = args.SIGMA,sigma_trainable = args.SIGMA_TRAIN, mode = args.MODE)
+        else:
+            with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+                f_log.write('not transfer learning'+'\n')
+            model = Net(dim=args.VOXEL_DIM, num_elems=AMOUNT_OF_ELEM, num_targets=TARGET_NUM, elements=elements, transformation=args.TRANSF,device=device,sigma_0 = args.SIGMA,sigma_trainable = args.SIGMA_TRAIN, mode = args.MODE)
+            
     else:
-        model = Net(dim=args.VOXEL_DIM, num_elems=AMOUNT_OF_ELEM, num_targets=TARGET_NUM, elements=elements, transformation=args.TRANSF,device=device,sigma_0 = args.SIGMA,sigma_trainable = args.SIGMA_TRAIN, mode = args.MODE)
+        with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+            f_log.write('Not sigma train'+'\n')
+        if args.TRANSF == 'g':
+            with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+                f_log.write('Gauss mode'+'\n')
+            train_set = dl.Gauss_dataset(conf_calc, label_dict, elements, indexing, train_indexes, dim = args.VOXEL_DIM, sigma = args.SIGMA)
+            test_set = dl.Gauss_dataset(conf_calc, label_dict, elements, indexing, test_indexes, dim = args.VOXEL_DIM, sigma = args.SIGMA)
+        elif args.TRANSF == 'w':
+            with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+                f_log.write('Waves mode'+'\n')
+            train_set = dl.Waves_dataset(conf_calc, label_dict, elements, indexing, train_indexes, dim = args.VOXEL_DIM, sigma = args.SIGMA)
+            test_set = dl.Waves_dataset(conf_calc, label_dict, elements, indexing, test_indexes, dim = args.VOXEL_DIM, sigma = args.SIGMA)
+        
+        if args.TRLEARNING:
+            with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+                f_log.write('Transfer learnin mode'+'\n')
+            model = Net(dim=args.VOXEL_DIM, num_elems=AMOUNT_OF_ELEM, num_targets=29, mode = args.MODE,device=device)
+        else:
+            with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+                f_log.write('Not transfer'+'\n')
+            model = Net(dim=args.VOXEL_DIM, num_elems=AMOUNT_OF_ELEM, num_targets=TARGET_NUM, mode = args.MODE, device=device)
+    
+    train_generator = td.DataLoader(train_set, batch_size=args.BATCH_SIZE, shuffle=True)
+    test_generator = td.DataLoader(test_set, batch_size=args.BATCH_SIZE, shuffle=False)
     
     with open(os.path.join(LOG_PATH,args.NUM_EXP+'_parameters.json'),'w') as f:
         json.dump(vars(args), f)
         
     if args.CONTINUE>1:
+        with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+            f_log.write('Continue mode'+'\n')
         model_checkpoints = os.listdir(MODEL_PATH)
         if 'checkpoint_es.pt' in model_checkpoints:
             model.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint_es.pt')))
@@ -299,9 +352,10 @@ def main():
 #                 model.module.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint.pt')))
 #             else:
 #                 model.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint.pt')))
-    for name, param in model.named_parameters():
-        print(name, type(param.data), param.size())
+    
     if args.TRLEARNING:
+        with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+            f_log.write('TRL mode'+'\n')
         model_checkpoints = os.listdir(MODEL_PATH)
         if 'checkpoint_es.pt' in model_checkpoints:
             model.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint_es.pt')))
@@ -317,8 +371,8 @@ def main():
 #                 model.load_state_dict(torch.load(os.path.join(MODEL_PATH,'checkpoint.pt')))
         for param in model.parameters():
             param.requires_grad = False
-        model.fc1 = nn.Linear(256, 128)
-        model.fc2 = nn.Linear(128,TARGET_NUM)
+        model.fc1 = nn.Linear(2048, 1024)
+        model.fc2 = nn.Linear(1024,TARGET_NUM)
         total_params = sum(p.numel() for p in model.parameters())
         print(f'{total_params:,} total parameters.')
         total_trainable_params = sum(
@@ -404,14 +458,17 @@ def main():
             f_log.write('Epoch , '+str(epoch)+'\n')
         try:
             if args.MODE == 'r':
-                train_regression(model, optimizer, train_generator, epoch,device,writer=writer,f_loss=f_train_loss,f_loss_ch=f_train_loss_ch, elements=elements,batch_size = args.BATCH_SIZE,MODEL_PATH=MODEL_PATH)
+                with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+                    f_log.write('Regression mode'+'\n')
+                train_regression(model, optimizer, train_generator, epoch,device,writer=writer,f_loss=f_train_loss,f_loss_ch=f_train_loss_ch, elements=elements,batch_size = args.BATCH_SIZE,MODEL_PATH=MODEL_PATH, sigma_train = args.SIGMA_TRAIN)
                 test_loss = test_regression(model, test_generator,epoch, device,writer=writer,f_loss=f_test_loss, elements=elements,batch_size = args.BATCH_SIZE)
-                early_stopping(test_loss, model)
                 
             elif args.MODE == 'c':
-                train_classification(model, optimizer, train_generator, epoch,device,writer=writer,f_loss=f_train_loss,f_loss_ch=f_train_loss_ch, elements=elements,batch_size = args.BATCH_SIZE,MODEL_PATH=MODEL_PATH, PENALTY = PENALTY)
+                with open(os.path.join(LOG_PATH,args.NUM_EXP+'_logs.txt'),'a') as f_log:
+                    f_log.write('Classification mode'+'\n')
+                train_classification(model, optimizer, train_generator, epoch,device,writer=writer,f_loss=f_train_loss,f_loss_ch=f_train_loss_ch, elements=elements,batch_size = args.BATCH_SIZE,MODEL_PATH=MODEL_PATH, PENALTY = PENALTY, sigma_train = args.SIGMA_TRAIN)
                 test_loss = test_classification(model, test_generator,epoch, device,writer=writer,f_loss=f_test_loss, elements=elements,batch_size = args.BATCH_SIZE, PENALTY = PENALTY)
-                early_stopping(test_loss, model)
+            early_stopping(test_loss, model)
     
             if early_stopping.early_stop:
                 print(epoch,"Early stopping")

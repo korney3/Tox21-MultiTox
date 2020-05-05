@@ -2,7 +2,7 @@
 #import all the necessary libraries
 
 import numpy as np
-from rdkit import Chem
+# from rdkit import Chem
 #import matplotlib.pyplot as plt
 import torch
 import sqlite3
